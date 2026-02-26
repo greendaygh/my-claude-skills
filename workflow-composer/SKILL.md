@@ -5,12 +5,12 @@ description: >
   Orchestrate biofoundry workflow composition through sub-skill delegation.
   Phase 1 (Resolve) runs locally; Phases 2-5 are delegated to wf-literature,
   wf-analysis, and wf-output skills for context isolation and independent re-runs.
-version: 2.3.0
+version: 2.4.0
 author: SBLab KRIBB
 tags: [biofoundry, workflow, orchestrator, unit-operation, literature-mining]
 ---
 
-# Workflow Composer v2.3 — Orchestrator
+# Workflow Composer v2.4 — Orchestrator
 
 Compose biofoundry workflows (~37 standard workflows, ~80 unit operations) through **case-first literature mining**. Supports two delegation modes: sub-skill chaining (default) and deep-executor (for batch processing).
 
