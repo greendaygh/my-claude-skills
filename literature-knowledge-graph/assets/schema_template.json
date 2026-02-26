@@ -1,0 +1,113 @@
+{
+  "project": "my-project",
+  "description": "프로젝트 설명을 입력하세요",
+  "version": "v1.0",
+  "entity_types": [
+    {
+      "label": "Gene",
+      "primary_key": "name",
+      "properties": ["symbol", "full_name", "organism", "function"],
+      "description": "유전자 또는 유전자 산물. 공식 기호(symbol) 사용 권장."
+    },
+    {
+      "label": "Protein",
+      "primary_key": "name",
+      "properties": ["uniprot_id", "function", "organism"],
+      "description": "단백질. UniProt ID가 있으면 포함."
+    },
+    {
+      "label": "Disease",
+      "primary_key": "name",
+      "properties": ["mesh_id", "category"],
+      "description": "질환 또는 표현형. MeSH 용어 우선 사용."
+    },
+    {
+      "label": "Drug",
+      "primary_key": "name",
+      "properties": ["drugbank_id", "mechanism", "status"],
+      "description": "약물 또는 화합물. 일반명(generic name) 사용."
+    },
+    {
+      "label": "Pathway",
+      "primary_key": "name",
+      "properties": ["database", "pathway_id"],
+      "description": "생물학적 경로. KEGG/Reactome ID 포함 권장."
+    },
+    {
+      "label": "CellType",
+      "primary_key": "name",
+      "properties": ["tissue", "organism"],
+      "description": "세포 유형. Cell Ontology 용어 우선."
+    },
+    {
+      "label": "Organism",
+      "primary_key": "name",
+      "properties": ["taxonomy_id"],
+      "description": "생물종. NCBI Taxonomy 기준."
+    }
+  ],
+  "relationship_types": [
+    {
+      "type": "INTERACTS_WITH",
+      "from_label": "Protein",
+      "to_label": "Protein",
+      "properties": ["interaction_type", "evidence_score"],
+      "description": "단백질 간 물리적 상호작용"
+    },
+    {
+      "type": "ASSOCIATED_WITH",
+      "from_label": "Gene",
+      "to_label": "Disease",
+      "properties": ["association_type", "p_value", "odds_ratio"],
+      "description": "유전자-질환 연관성"
+    },
+    {
+      "type": "TARGETS",
+      "from_label": "Drug",
+      "to_label": "Protein",
+      "properties": ["action_type", "affinity"],
+      "description": "약물의 표적 단백질"
+    },
+    {
+      "type": "PARTICIPATES_IN",
+      "from_label": "Gene",
+      "to_label": "Pathway",
+      "properties": ["role"],
+      "description": "유전자가 경로에 참여"
+    },
+    {
+      "type": "TREATS",
+      "from_label": "Drug",
+      "to_label": "Disease",
+      "properties": ["clinical_phase", "efficacy"],
+      "description": "약물의 질환 치료 관계"
+    },
+    {
+      "type": "EXPRESSED_IN",
+      "from_label": "Gene",
+      "to_label": "CellType",
+      "properties": ["expression_level", "condition"],
+      "description": "유전자 발현 위치"
+    },
+    {
+      "type": "REGULATES",
+      "from_label": "Gene",
+      "to_label": "Gene",
+      "properties": ["regulation_type", "mechanism"],
+      "description": "유전자 조절 관계 (up/down/modulate)"
+    }
+  ],
+  "provenance": {
+    "paper_label": "Paper",
+    "paper_properties": [
+      "doi", "pmid", "pmcid", "title", "authors", "year",
+      "journal", "abstract", "full_text_available"
+    ],
+    "extraction_rel": "EXTRACTED_FROM",
+    "extraction_properties": [
+      "confidence", "source_section", "extraction_date",
+      "panel_verified", "panel_confidence", "extraction_cycle",
+      "schema_version"
+    ]
+  }
+}

@@ -1,0 +1,87 @@
+{
+  "schema_version": "2.0.0",
+  "default_date_range_years": 10,
+  "query_template": "({synonyms_OR}) AND (protocol OR methods OR procedure) AND ({mesh_terms})",
+  "pubmed_query_template": "({synonyms_OR}[Title/Abstract]) AND (protocol[Title/Abstract] OR methods[Title/Abstract]) AND ({mesh_terms}[MeSH Terms])",
+  "max_results_per_query": 50,
+  "domain_queries": {
+    "Molecular Biology / Cloning": {
+      "base_mesh": ["Cloning, Molecular", "DNA, Recombinant", "Genetic Engineering"],
+      "technique_templates": {
+        "WB030": {
+          "keywords": ["DNA assembly", "Gibson assembly", "Golden Gate assembly", "DNA ligation"],
+          "synonyms": ["isothermal assembly", "one-pot assembly", "scarless cloning", "modular cloning", "MoClo"],
+          "exclusions": ["clinical trial", "diagnosis", "patient"],
+          "preferred_journals": ["Nature Methods", "ACS Synthetic Biology", "Nucleic Acids Research"]
+        },
+        "WB040": {
+          "keywords": ["site-directed mutagenesis", "PCR mutagenesis", "QuikChange"],
+          "synonyms": ["SDM", "point mutation", "codon saturation mutagenesis", "error-prone PCR"],
+          "exclusions": ["clinical", "diagnosis"],
+          "preferred_journals": ["Methods in Enzymology", "Biotechniques"]
+        }
+      }
+    },
+    "Protein Expression / Purification": {
+      "base_mesh": ["Recombinant Proteins", "Protein Engineering", "Chromatography"],
+      "technique_templates": {
+        "WB050": {
+          "keywords": ["protein expression", "recombinant protein", "E. coli expression"],
+          "synonyms": ["heterologous expression", "overexpression", "IPTG induction"],
+          "exclusions": ["clinical trial", "patient cohort"],
+          "preferred_journals": ["Protein Expression and Purification", "Biotechnology and Bioengineering"]
+        }
+      }
+    },
+    "Genomics / NGS": {
+      "base_mesh": ["High-Throughput Nucleotide Sequencing", "Genome, Human", "RNA-Seq"],
+      "technique_templates": {
+        "WD010": {
+          "keywords": ["NGS library preparation", "sequencing library", "Illumina library"],
+          "synonyms": ["next-generation sequencing prep", "tagmentation", "adapter ligation"],
+          "exclusions": ["clinical diagnosis", "patient"],
+          "preferred_journals": ["Nature Biotechnology", "Genome Research", "Bioinformatics"]
+        }
+      }
+    },
+    "Cell Biology / Culture": {
+      "base_mesh": ["Cell Culture Techniques", "Transfection", "Flow Cytometry"],
+      "technique_templates": {
+        "WB060": {
+          "keywords": ["cell transfection", "lipofection", "electroporation"],
+          "synonyms": ["nucleofection", "gene delivery", "DNA transfection"],
+          "exclusions": ["clinical trial", "in vivo"],
+          "preferred_journals": ["Nature Protocols", "Journal of Biological Methods"]
+        }
+      }
+    },
+    "High-Throughput Screening": {
+      "base_mesh": ["High-Throughput Screening Assays", "Drug Discovery"],
+      "technique_templates": {
+        "WT010": {
+          "keywords": ["high-throughput screening", "HTS", "compound screening"],
+          "synonyms": ["automated screening", "plate-based assay", "384-well screening"],
+          "exclusions": ["review", "meta-analysis"],
+          "preferred_journals": ["SLAS Discovery", "Assay and Drug Development Technologies"]
+        }
+      }
+    },
+    "Synthetic Biology": {
+      "base_mesh": ["Synthetic Biology", "Metabolic Engineering", "Gene Circuits"],
+      "technique_templates": {
+        "WB070": {
+          "keywords": ["DBTL cycle", "design-build-test-learn", "automated strain engineering"],
+          "synonyms": ["biofoundry workflow", "metabolic pathway engineering", "combinatorial assembly"],
+          "exclusions": ["review article", "perspective"],
+          "preferred_journals": ["ACS Synthetic Biology", "Nature Biotechnology", "Metabolic Engineering"]
+        }
+      }
+    }
+  },
+  "fallback_query": "({workflow_name}) AND (automated OR biofoundry OR high-throughput) AND (protocol OR methods)",
+  "query_expansion_rules": {
+    "add_automation_terms": true,
+    "automation_keywords": ["automated", "robotic", "high-throughput", "biofoundry", "liquid handler"],
+    "year_boost": "recent 5 years get 1.5x weight in ranking"
+  }
+}

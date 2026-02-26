@@ -1,0 +1,91 @@
+{
+  "domain_groups": {
+    "Molecular Biology / Cloning": {
+      "workflows": ["WB005", "WB010", "WB020", "WB025", "WB030", "WB040", "WB045", "WB050", "WB060", "WB150"]
+    },
+    "Sequencing / NGS": {
+      "workflows": ["WB025", "WT010", "WT012", "WT015"]
+    },
+    "Fermentation / Bioprocess": {
+      "workflows": ["WB100", "WT100", "WT110", "WT120", "WT130", "WT140", "WT150", "WT160"]
+    },
+    "Protein Engineering": {
+      "workflows": ["WB070", "WB080", "WB090", "WT020", "WT030", "WT040"]
+    },
+    "Metabolomics / Analytics": {
+      "workflows": ["WT045", "WT046", "WT050", "WT060", "WT070", "WT080", "WT085", "WT090"]
+    },
+    "Computational / Design": {
+      "workflows": ["WD010", "WD020", "WD030", "WD040", "WD050", "WD060", "WD070", "WD080", "WD090", "WD100", "WD110", "WD120", "WD130", "WL010", "WL020", "WL030", "WL040", "WL050", "WL055", "WL060", "WL070", "WL080", "WL090", "WL100"]
+    },
+    "Cell Biology": {
+      "workflows": ["WB110", "WB120", "WB125", "WB130", "WB140"]
+    }
+  },
+  "workflow_to_domain": {
+    "WB005": "Molecular Biology / Cloning",
+    "WB010": "Molecular Biology / Cloning",
+    "WB020": "Molecular Biology / Cloning",
+    "WB025": "Molecular Biology / Cloning",
+    "WB030": "Molecular Biology / Cloning",
+    "WB040": "Molecular Biology / Cloning",
+    "WB045": "Molecular Biology / Cloning",
+    "WB050": "Molecular Biology / Cloning",
+    "WB060": "Molecular Biology / Cloning",
+    "WB070": "Protein Engineering",
+    "WB080": "Protein Engineering",
+    "WB090": "Protein Engineering",
+    "WB100": "Fermentation / Bioprocess",
+    "WB110": "Cell Biology",
+    "WB120": "Cell Biology",
+    "WB125": "Cell Biology",
+    "WB130": "Cell Biology",
+    "WB140": "Cell Biology",
+    "WB150": "Molecular Biology / Cloning",
+    "WD010": "Computational / Design",
+    "WD020": "Computational / Design",
+    "WD030": "Computational / Design",
+    "WD040": "Computational / Design",
+    "WD050": "Computational / Design",
+    "WD060": "Computational / Design",
+    "WD070": "Computational / Design",
+    "WD080": "Computational / Design",
+    "WD090": "Computational / Design",
+    "WD100": "Computational / Design",
+    "WD110": "Computational / Design",
+    "WD120": "Computational / Design",
+    "WD130": "Computational / Design",
+    "WL010": "Computational / Design",
+    "WL020": "Computational / Design",
+    "WL030": "Computational / Design",
+    "WL040": "Computational / Design",
+    "WL050": "Computational / Design",
+    "WL055": "Computational / Design",
+    "WL060": "Computational / Design",
+    "WL070": "Computational / Design",
+    "WL080": "Computational / Design",
+    "WL090": "Computational / Design",
+    "WL100": "Computational / Design",
+    "WT010": "Sequencing / NGS",
+    "WT012": "Sequencing / NGS",
+    "WT015": "Sequencing / NGS",
+    "WT020": "Protein Engineering",
+    "WT030": "Protein Engineering",
+    "WT040": "Protein Engineering",
+    "WT045": "Metabolomics / Analytics",
+    "WT046": "Metabolomics / Analytics",
+    "WT050": "Metabolomics / Analytics",
+    "WT060": "Metabolomics / Analytics",
+    "WT070": "Metabolomics / Analytics",
+    "WT080": "Metabolomics / Analytics",
+    "WT085": "Metabolomics / Analytics",
+    "WT090": "Metabolomics / Analytics",
+    "WT100": "Fermentation / Bioprocess",
+    "WT110": "Fermentation / Bioprocess",
+    "WT120": "Fermentation / Bioprocess",
+    "WT130": "Fermentation / Bioprocess",
+    "WT140": "Fermentation / Bioprocess",
+    "WT150": "Fermentation / Bioprocess",
+    "WT160": "Fermentation / Bioprocess"
+  }
+}

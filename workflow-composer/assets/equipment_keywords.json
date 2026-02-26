@@ -1,0 +1,124 @@
+{
+  "schema_version": "2.0.0",
+  "description": "Equipment and software keyword dictionary for UO mapping signal computation",
+  "equipment_to_uo": {
+    "UHW010": {
+      "uo_name": "Liquid Handling",
+      "keywords": ["pipette", "pipettor", "liquid handler", "Hamilton", "Beckman", "Tecan", "multichannel", "dispenser", "aspirate", "aliquot"],
+      "model_keywords": ["Hamilton STAR", "Hamilton STARlet", "Beckman Biomek", "Tecan Freedom", "Tecan Fluent", "Opentrons", "OT-2", "Flex"],
+      "context_patterns": ["reagent preparation", "sample distribution", "dilution series", "plate setup"]
+    },
+    "UHW015": {
+      "uo_name": "Bulk Liquid Dispenser",
+      "keywords": ["bulk dispenser", "plate filler", "reagent dispenser", "media dispenser"],
+      "model_keywords": ["Multidrop", "Thermo Multidrop", "BioTek MultiFlo", "Mantis"],
+      "context_patterns": ["media dispensing", "buffer fill", "plate filling", "bulk addition"]
+    },
+    "UHW020": {
+      "uo_name": "96 Channel Liquid Handling",
+      "keywords": ["96-channel", "96 channel", "head", "magnetic bead"],
+      "model_keywords": ["Bravo", "Agilent Bravo", "epMotion", "KingFisher"],
+      "context_patterns": ["bead cleanup", "library prep", "magnetic separation", "NGS prep"]
+    },
+    "UHW030": {
+      "uo_name": "Nanoliter Liquid Dispensing",
+      "keywords": ["nanoliter", "acoustic", "contactless dispensing", "picoliter"],
+      "model_keywords": ["Echo", "Labcyte Echo", "Beckman Echo", "I.DOT", "Dispendix"],
+      "context_patterns": ["miniaturized assay", "nanoliter transfer", "acoustic dispensing"]
+    },
+    "UHW060": {
+      "uo_name": "Colony Picking",
+      "keywords": ["colony picker", "colony picking", "automated picking"],
+      "model_keywords": ["QPix", "Molecular Devices QPix", "PIXL", "Singer PIXL", "Kbiosystems"],
+      "context_patterns": ["pick colonies", "colony selection", "transformant picking"]
+    },
+    "UHW070": {
+      "uo_name": "Centrifuge",
+      "keywords": ["centrifuge", "centrifugation", "spin", "pellet"],
+      "model_keywords": ["Eppendorf", "Beckman Avanti", "Sorvall", "Hettich", "Vspin"],
+      "context_patterns": ["cell harvest", "pellet", "supernatant removal", "spin down"]
+    },
+    "UHW080": {
+      "uo_name": "Thermal Cycler / PCR",
+      "keywords": ["PCR", "thermal cycler", "thermocycler", "polymerase chain reaction"],
+      "model_keywords": ["Bio-Rad C1000", "Bio-Rad T100", "Applied Biosystems", "Veriti", "ProFlex", "SimpliAmp"],
+      "context_patterns": ["amplification", "PCR cycling", "annealing", "extension", "denaturation"]
+    },
+    "UHW090": {
+      "uo_name": "Incubator / Shaker",
+      "keywords": ["incubator", "shaker", "incubation", "shaking"],
+      "model_keywords": ["Infors", "Multitron", "Innova", "Kuhner", "BioShake"],
+      "context_patterns": ["culture growth", "overnight culture", "shake flask", "temperature incubation"]
+    },
+    "UHW100": {
+      "uo_name": "Plate Reader",
+      "keywords": ["plate reader", "microplate reader", "absorbance", "fluorescence reader", "luminescence"],
+      "model_keywords": ["BMG", "CLARIOstar", "PHERAstar", "Tecan Infinite", "BioTek Synergy", "SpectraMax", "EnVision"],
+      "context_patterns": ["OD measurement", "fluorescence measurement", "absorbance reading", "growth curve"]
+    },
+    "UHW110": {
+      "uo_name": "Gel Electrophoresis",
+      "keywords": ["gel electrophoresis", "agarose gel", "PAGE", "SDS-PAGE", "gel imaging"],
+      "model_keywords": ["Bio-Rad Gel Doc", "ChemiDoc", "E-Gel", "TapeStation", "Fragment Analyzer", "Bioanalyzer"],
+      "context_patterns": ["size verification", "DNA verification", "protein gel", "gel analysis"]
+    },
+    "UHW120": {
+      "uo_name": "Flow Cytometry / Cell Sorting",
+      "keywords": ["flow cytometry", "FACS", "cell sorting", "flow cytometer"],
+      "model_keywords": ["BD FACSAria", "BD Accuri", "Sony SH800", "Bio-Rad S3e", "Beckman CytoFLEX", "MACSQuant"],
+      "context_patterns": ["cell sorting", "fluorescence gating", "GFP screening", "phenotype screening"]
+    },
+    "UHW130": {
+      "uo_name": "Sequencer",
+      "keywords": ["sequencer", "sequencing", "NGS"],
+      "model_keywords": ["Illumina MiSeq", "Illumina NovaSeq", "Illumina NextSeq", "Oxford Nanopore", "MinION", "PacBio Sequel"],
+      "context_patterns": ["DNA sequencing", "library sequencing", "whole genome sequencing", "amplicon sequencing"]
+    },
+    "UHW140": {
+      "uo_name": "Mass Spectrometer",
+      "keywords": ["mass spectrometry", "mass spec", "MS", "LC-MS", "MALDI"],
+      "model_keywords": ["Thermo Orbitrap", "Bruker", "Waters Xevo", "Agilent QTOF", "SCIEX"],
+      "context_patterns": ["protein identification", "metabolite analysis", "LC-MS analysis", "proteomics"]
+    },
+    "UHW150": {
+      "uo_name": "Microscope / Imaging",
+      "keywords": ["microscope", "microscopy", "imaging", "fluorescence microscopy"],
+      "model_keywords": ["Zeiss", "Nikon", "Leica", "Olympus", "Keyence", "IncuCyte", "Celigo"],
+      "context_patterns": ["cell imaging", "colony imaging", "fluorescence imaging", "morphology"]
+    },
+    "UHW160": {
+      "uo_name": "HPLC / Chromatography",
+      "keywords": ["HPLC", "chromatography", "FPLC", "column purification"],
+      "model_keywords": ["Agilent 1260", "Waters ACQUITY", "Thermo UltiMate", "AKTA", "GE AKTA", "Cytiva AKTA"],
+      "context_patterns": ["purification", "protein purification", "metabolite separation", "affinity chromatography"]
+    },
+    "USW010": {
+      "uo_name": "Sequence Design Software",
+      "keywords": ["sequence design", "codon optimization", "primer design"],
+      "model_keywords": ["Benchling", "SnapGene", "Geneious", "ApE", "Primer3", "IDT OligoAnalyzer"],
+      "context_patterns": ["construct design", "primer design", "plasmid design", "codon optimization"]
+    },
+    "USW020": {
+      "uo_name": "Bioinformatics Pipeline",
+      "keywords": ["bioinformatics", "sequence analysis", "alignment", "variant calling"],
+      "model_keywords": ["BWA", "STAR", "DESeq2", "GATK", "samtools", "bcftools", "Nextflow", "Snakemake"],
+      "context_patterns": ["sequence alignment", "read mapping", "differential expression", "variant analysis"]
+    },
+    "USW030": {
+      "uo_name": "Laboratory Information Management",
+      "keywords": ["LIMS", "sample tracking", "lab management"],
+      "model_keywords": ["Benchling", "LabArchives", "SENAITE", "Labguru"],
+      "context_patterns": ["sample tracking", "inventory management", "experiment logging"]
+    }
+  },
+  "function_keywords": {
+    "sample_preparation": ["lysis", "extraction", "homogenization", "digest", "sonication"],
+    "amplification": ["PCR", "amplify", "amplification", "cycling", "polymerase"],
+    "purification": ["purify", "purification", "cleanup", "wash", "elute", "column"],
+    "transformation": ["transform", "transfect", "electroporate", "nucleofect", "heat shock"],
+    "incubation": ["incubate", "culture", "grow", "shake", "ferment"],
+    "measurement": ["measure", "read", "quantify", "OD", "absorbance", "fluorescence"],
+    "separation": ["centrifuge", "filter", "sort", "separate", "fractionate"],
+    "analysis": ["analyze", "sequence", "image", "detect", "identify"]
+  }
+}

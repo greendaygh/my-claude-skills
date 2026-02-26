@@ -1,0 +1,203 @@
+{
+  "schema_version": "2.0.0",
+  "phases": {
+    "phase_2_search": {
+      "target_papers_new": 4,
+      "target_papers_upgrade": 3,
+      "max_candidates_pass1": 15,
+      "max_fulltext_pass2": 4,
+      "pass1_ranking_weights": {
+        "has_pmcid": 0.30,
+        "year_recency": 0.20,
+        "title_keyword_overlap": 0.30,
+        "citation_count_norm": 0.20
+      },
+      "stop_new_threshold": 0.10,
+      "min_qualifying_for_stop": 3,
+      "min_per_case_type": 1,
+      "webfetch_timeout_ms": 30000,
+      "per_paper_budget_seconds": 60,
+      "circuit_breaker_threshold": 3,
+      "webfetch_calls_per_paper": 3,
+      "webfetch_char_limits": {
+        "methods": 10000,
+        "results_qc": 3000,
+        "equipment": 4000
+      },
+      "incremental_save_interval": 5,
+      "search_batch_size": 5,
+      "citation_expansion_cap": 8
+    },
+    "phase_2_pqa": {
+      "pqa_threshold": 0.4,
+      "max_pool_size": 50,
+      "pqa_full_eval_threshold": 8,
+      "rubric": {
+        "JQ": {
+          "weight": 0.10,
+          "name": "Journal/Source Quality",
+          "method": "journal_tier_lookup",
+          "description": "Score from journal_tiers.json lookup. Tier 1=0.9, Tier 2=0.7, Tier 3=0.5, Unknown=0.3"
+        },
+        "PD": {
+          "weight": 0.25,
+          "name": "Protocol Detail Level",
+          "method": "step_count_band",
+          "bands": {
+            "0.9": ">=8 steps with catalog numbers or detailed concentrations",
+            "0.7": ">=6 steps with conditions",
+            "0.5": ">=4 steps",
+            "0.3": "<4 steps or methods section only"
+          }
+        },
+        "UC": {
+          "weight": 0.25,
+          "name": "UO Coverage Breadth",
+          "method": "uo_mappable_count",
+          "description": "Fraction of paper steps that map to known UO catalog entries"
+        },
+        "ES": {
+          "weight": 0.15,
+          "name": "Equipment/Software Specificity",
+          "method": "equipment_software_count",
+          "description": "Count of named equipment/software with model numbers. >=5=0.9, 3-4=0.7, 1-2=0.5, 0=0.2"
+        },
+        "EV": {
+          "weight": 0.10,
+          "name": "Experimental Validation",
+          "method": "has_quantitative_results",
+          "description": "Presence of quantitative results (yields, purity, activity). Yes=0.9, Qualitative only=0.5, None=0.1"
+        },
+        "UG": {
+          "weight": 0.15,
+          "name": "Uniqueness/Gap Fill",
+          "method": "jaccard_uniqueness",
+          "description": "1 - max Jaccard similarity to any existing pool paper's technique set"
+        }
+      }
+    },
+    "phase_2_validation": {
+      "method": "llm_completeness_check",
+      "description": "Single LLM call to check case_summary.json completeness vs extracted cases"
+    },
+    "phase_3_analysis": {
+      "step_alignment_method": "semantic_tfidf",
+      "similarity_threshold": 0.5,
+      "positional_fallback": true,
+      "mandatory_common_threshold": 0.80,
+      "conditional_threshold": 0.30,
+      "variant_clustering": {
+        "method": "hierarchical",
+        "primary_axis": "core_technique",
+        "min_cluster_size": 2,
+        "axis_weights": {
+          "core_technique": 0.50,
+          "equipment_set": 0.20,
+          "step_pattern": 0.15,
+          "scale": 0.10,
+          "automation": 0.05
+        }
+      }
+    },
+    "phase_3_peer_review": {
+      "expert_count": 2,
+      "experts": [
+        {
+          "role": "Protocol Specialist",
+          "profile": "15+ years protocol development expert",
+          "focus": "UO mapping accuracy, step completeness, parameter range validity",
+          "checklist_items": 10
+        },
+        {
+          "role": "Quality Systems Expert",
+          "profile": "QC/GLP quality systems expert",
+          "focus": "QC checkpoint placement, evidence tag consistency, [미기재] items",
+          "checklist_items": 10
+        }
+      ],
+      "pass_threshold": 8,
+      "item_format": "PASS/FAIL with 1-line rationale"
+    },
+    "phase_4_compose": {
+      "categorical_aggregation": "majority_vote",
+      "numeric_aggregation": "range_with_median",
+      "min_case_refs_for_consensus": 2,
+      "evidence_tags": [
+        "literature-direct",
+        "literature-supplementary",
+        "literature-consensus",
+        "manufacturer-protocol",
+        "expert-inference",
+        "catalog-default"
+      ],
+      "required_components_hw": [
+        "input",
+        "output",
+        "equipment",
+        "consumables",
+        "material_and_method",
+        "result",
+        "discussion"
+      ],
+      "required_components_sw": [
+        "input",
+        "output",
+        "parameters",
+        "environment",
+        "method",
+        "result",
+        "discussion"
+      ]
+    },
+    "phase_5_output": {
+      "parallel_agents": 2,
+      "agents": [
+        {"role": "korean_report", "output": "composition_report_ko.md"},
+        {"role": "korean_workflow", "output": "composition_workflow_ko.md"}
+      ],
+      "context_graph_method": "script",
+      "main_agent_restrictions": ["no_korean_prose", "no_mermaid_context_graph"]
+    },
+    "uo_mapping": {
+      "signal_weights": {
+        "equipment": 0.35,
+        "function": 0.30,
+        "io": 0.20,
+        "context": 0.15
+      },
+      "strong_match_threshold": 0.70,
+      "auto_assign_threshold": 0.70,
+      "llm_tiebreak_range": [0.50, 0.70],
+      "unmapped_flag_threshold": 0.50
+    }
+  },
+  "paper_cache": {
+    "enabled": true,
+    "cache_dir": "/home/haseong/paper_cache",
+    "max_full_text_chars": 20000,
+    "index_file": "index.json"
+  },
+  "sessions": {
+    "session1": {
+      "phases": [1, 2, 3, 3.5, 4],
+      "checkpoint": "cycle1",
+      "guide": "references/session1-guide.md"
+    },
+    "session2": {
+      "phases": [5, 6, 7],
+      "checkpoint": "cycle2",
+      "guide": "references/session2-guide.md"
+    },
+    "session3": {
+      "phases": [8, 9, 10],
+      "checkpoint": null,
+      "guide": "references/session3-guide.md"
+    }
+  },
+  "context_optimization": {
+    "file_reference_mode": true,
+    "max_inline_summary_chars": 500,
+    "checkpoint_enabled": true,
+    "max_excerpt_chars": 2000
+  }
+}

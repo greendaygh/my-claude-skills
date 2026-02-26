@@ -1,0 +1,359 @@
+"""Full workflow directory migration."""
+
+import json
+import shutil
+from datetime import datetime, timezone
+from pathlib import Path
+
+from case_migrator import migrate_case_card, is_canonical, enrich_case_card, is_enriched
+from metadata_builder import load_paper_list, build_paper_index
+from paper_enricher import enrich_paper_list, save_enriched_paper_list, save_paper_fulltext
+from report_generator import write_reports
+
+
+# Deprecated → standard statistics field name map
+_STATS_RENAME = {
+    "total_papers": "papers_analyzed",
+    "total_cases": "cases_collected",
+    "total_variants": "variants_identified",
+    "total_uo_types": "total_uos",
+}
+
+
+def update_statistics(stats: dict) -> tuple[dict, list[str]]:
+    """Rename deprecated statistics field names to standard.
+
+    Returns (updated_stats, list of change descriptions).
+    """
+    updated = {}
+    changes = []
+    for key, value in stats.items():
+        if key in _STATS_RENAME:
+            new_key = _STATS_RENAME[key]
+            updated[new_key] = value
+            changes.append(f"{key} → {new_key}")
+        else:
+            updated[key] = value
+    return updated, changes
+
+
+def _backup_cases(wf_dir: Path) -> Path:
+    """Copy 02_cases/ to _versions/pre_migration/02_cases/.
+
+    Returns the backup dir path.
+    """
+    backup_dir = wf_dir / "_versions" / "pre_migration"
+    cases_src = wf_dir / "02_cases"
+    if cases_src.exists():
+        backup_cases = backup_dir / "02_cases"
+        if not backup_cases.exists():
+            shutil.copytree(cases_src, backup_cases)
+    return backup_dir
+
+
+def migrate_workflow(wf_dir: Path, dry_run: bool = False) -> dict:
+    """Migrate all case cards in a workflow directory.
+
+    Steps:
+    1. Load paper_list.json → build paper index
+    2. Load composition_data.json → extract workflow_id
+    3. Backup original cases to _versions/pre_migration/
+    4. Migrate each case card in 02_cases/
+    5. Update statistics field names in composition_data.json
+    6. Write migration report to 00_metadata/migration_report.json
+
+    Args:
+        wf_dir: workflow directory path
+        dry_run: if True, compute changes but don't write files
+
+    Returns:
+        Migration report dict with: workflow_id, migrated_cases, skipped_cases,
+        total_changes, statistics_changes, timestamp
+    """
+    wf_dir = Path(wf_dir)
+
+    # 1. Load paper index
+    paper_data = load_paper_list(wf_dir)
+    paper_index = build_paper_index(paper_data)
+
+    # 2. Load composition_data.json
+    comp_path = wf_dir / "composition_data.json"
+    comp_data = {}
+    if comp_path.exists():
+        with open(comp_path, encoding="utf-8") as f:
+            comp_data = json.load(f)
+    workflow_id = comp_data.get("workflow_id", "")
+
+    # 3. Backup (only in real run)
+    if not dry_run:
+        backup_dir = _backup_cases(wf_dir)
+        # Also backup composition_data.json
+        comp_backup = backup_dir / "composition_data.json"
+        if comp_path.exists() and not comp_backup.exists():
+            backup_dir.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(comp_path, comp_backup)
+
+    # 4. Migrate each case file
+    cases_dir = wf_dir / "02_cases"
+    case_files = sorted(cases_dir.glob("case_C*.json")) if cases_dir.exists() else []
+
+    migrated_cases = 0
+    skipped_cases = 0
+    total_changes = 0
+    per_case_changes: dict[str, list[str]] = {}
+
+    for case_path in case_files:
+        with open(case_path, encoding="utf-8") as f:
+            case_data = json.load(f)
+
+        if is_canonical(case_data):
+            skipped_cases += 1
+            per_case_changes[case_path.name] = ["Already canonical — skipped"]
+            continue
+
+        result = migrate_case_card(case_data, paper_index, workflow_id=workflow_id, dry_run=True)
+        migrated_dict = result["migrated"]
+        changes = result["changes"]
+
+        per_case_changes[case_path.name] = changes
+        total_changes += len(changes)
+        migrated_cases += 1
+
+        if not dry_run:
+            with open(case_path, "w", encoding="utf-8") as f:
+                json.dump(migrated_dict, f, indent=2)
+
+    # 5. Update statistics
+    stats_changes: list[str] = []
+    if "statistics" in comp_data:
+        updated_stats, stats_changes = update_statistics(comp_data["statistics"])
+        if not dry_run and stats_changes:
+            comp_data["statistics"] = updated_stats
+            with open(comp_path, "w", encoding="utf-8") as f:
+                json.dump(comp_data, f, indent=2)
+
+    # 6. Build report
+    now = datetime.now(timezone.utc).isoformat()
+    report = {
+        "migration_version": "1.0.0",
+        "migrated_at": now,
+        "timestamp": now,
+        "workflow_id": workflow_id,
+        "migrated_cases": migrated_cases,
+        "skipped_cases": skipped_cases,
+        "total_changes": total_changes,
+        "statistics_changes": stats_changes,
+        "per_case_changes": per_case_changes,
+    }
+
+    if not dry_run:
+        report_dir = wf_dir / "00_metadata"
+        report_dir.mkdir(parents=True, exist_ok=True)
+        with open(report_dir / "migration_report.json", "w", encoding="utf-8") as f:
+            json.dump(report, f, indent=2)
+
+    return report
+
+
+# ---------------------------------------------------------------------------
+# Phase B: Enrichment
+# ---------------------------------------------------------------------------
+
+def _backup_for_enrichment(wf_dir: Path) -> Path:
+    """Backup cases and reports before enrichment.
+
+    Creates _versions/pre_enrichment/ with:
+    - 02_cases/ (all case card JSONs)
+    - composition_report.md, composition_workflow.md
+    - paper_list.json
+
+    Returns backup dir path. Idempotent: skips if already exists.
+    """
+    backup_dir = wf_dir / "_versions" / "pre_enrichment"
+
+    # Backup cases
+    cases_src = wf_dir / "02_cases"
+    if cases_src.exists():
+        backup_cases = backup_dir / "02_cases"
+        if not backup_cases.exists():
+            shutil.copytree(cases_src, backup_cases)
+
+    # Backup reports
+    for fname in ("composition_report.md", "composition_workflow.md",
+                   "composition_report_ko.md", "composition_workflow_ko.md"):
+        src = wf_dir / fname
+        if src.exists():
+            dst = backup_dir / fname
+            if not dst.exists():
+                backup_dir.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(src, dst)
+
+    # Backup paper_list
+    for subdir in ("01_papers", "01_literature"):
+        src = wf_dir / subdir / "paper_list.json"
+        if src.exists():
+            dst = backup_dir / "paper_list.json"
+            if not dst.exists():
+                backup_dir.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(src, dst)
+            break
+
+    return backup_dir
+
+
+def enrich_workflow(wf_dir: Path, dry_run: bool = False) -> dict:
+    """Enrich all case cards in a workflow directory using PubMed data.
+
+    Automatically runs Phase A (mechanical migration) first to ensure
+    case cards are in canonical format before enrichment.
+
+    Phase A — Mechanical migration (field renaming, case_id fix, etc.)
+    Phase B pipeline:
+    B.1 — Enrich paper_list with PubMed metadata (PMID, abstract, MeSH)
+    B.2 — Enrich each case card using paper data (6-principle extraction)
+    B.3 — Structural blocks (completeness, flow_diagram, workflow_context)
+    B.4 — Regenerate reports (13-section + 5-section + Korean)
+
+    Args:
+        wf_dir: workflow directory path
+        dry_run: if True, compute changes but don't write files
+
+    Returns:
+        Enrichment report dict (includes Phase A migration summary).
+    """
+    wf_dir = Path(wf_dir)
+    now = datetime.now(timezone.utc).isoformat()
+
+    # Phase A — Mechanical migration first (idempotent: skips canonical cards)
+    migration_report = migrate_workflow(wf_dir, dry_run=dry_run)
+
+    # Load composition_data
+    comp_path = wf_dir / "composition_data.json"
+    comp_data = {}
+    if comp_path.exists():
+        with open(comp_path, encoding="utf-8") as f:
+            comp_data = json.load(f)
+    workflow_id = comp_data.get("workflow_id", "")
+
+    # B.1 — Paper enrichment
+    paper_data = load_paper_list(wf_dir)
+    enriched_papers = enrich_paper_list(paper_data)
+    papers = enriched_papers.get("papers", [])
+
+    # Build paper index by paper_id and also by "id" field
+    paper_index = {}
+    for p in papers:
+        pid = p.get("paper_id", p.get("id", ""))
+        if pid:
+            paper_index[pid] = p
+
+    paper_enrichment_stats = {
+        "total": len(papers),
+        "enriched": sum(1 for p in papers if p.get("enrichment_status") == "enriched"),
+        "partial": sum(1 for p in papers if p.get("enrichment_status") == "partial"),
+        "failed": sum(1 for p in papers if p.get("enrichment_status") == "failed"),
+        "full_text_fetched": sum(1 for p in papers if p.get("text_source") in ("pmc_oa", "europepmc")),
+    }
+
+    # Backup before writing
+    if not dry_run:
+        _backup_for_enrichment(wf_dir)
+
+    # Save enriched paper_list and full texts (or abstracts as fallback)
+    if not dry_run:
+        save_enriched_paper_list(wf_dir, enriched_papers)
+        for p in papers:
+            text = p.get("full_text", "") or p.get("abstract", "")
+            pid = p.get("paper_id", p.get("id", ""))
+            if text and pid:
+                save_paper_fulltext(wf_dir, pid, text)
+
+    # B.2 — Case card enrichment
+    cases_dir = wf_dir / "02_cases"
+    case_files = sorted(cases_dir.glob("case_C*.json")) if cases_dir.exists() else []
+
+    enriched_cases = 0
+    skipped_cases = 0
+    per_case_changes: dict[str, list[str]] = {}
+
+    for case_path in case_files:
+        with open(case_path, encoding="utf-8") as f:
+            case_data = json.load(f)
+
+        # Idempotency check
+        if is_enriched(case_data):
+            skipped_cases += 1
+            per_case_changes[case_path.name] = ["Already enriched — skipped"]
+            continue
+
+        # Find matching paper
+        paper_id = case_data.get("paper_id", "")
+        if not paper_id:
+            meta = case_data.get("metadata", {})
+            # Try to match by existing paper reference
+            for pid, pinfo in paper_index.items():
+                if meta.get("doi") and meta["doi"] == pinfo.get("doi"):
+                    paper_id = pid
+                    break
+                if meta.get("pmid") and str(meta["pmid"]) == str(pinfo.get("pmid")):
+                    paper_id = pid
+                    break
+
+        paper_info = paper_index.get(paper_id, {})
+
+        # Enrich the case card
+        enriched = enrich_case_card(case_data, paper_info, comp_data)
+        enriched_cases += 1
+
+        changes = []
+        if paper_info.get("enrichment_status") == "enriched":
+            changes.append(f"Paper {paper_id}: PubMed metadata applied")
+        if enriched.get("completeness", {}).get("score", 0) > 0:
+            changes.append(f"Completeness: {enriched['completeness']['score']:.3f}")
+        if enriched.get("flow_diagram") and "[QC]" in enriched.get("flow_diagram", ""):
+            changes.append("Flow diagram: QC checkpoints added")
+        if enriched.get("workflow_context", {}).get("boundary_inputs"):
+            changes.append("Workflow context: boundary info added")
+        per_case_changes[case_path.name] = changes if changes else ["Enrichment applied"]
+
+        if not dry_run:
+            with open(case_path, "w", encoding="utf-8") as f:
+                json.dump(enriched, f, indent=2, ensure_ascii=False)
+
+    # B.4 — Report regeneration
+    report_files = {}
+    report_error = ""
+    if not dry_run:
+        try:
+            report_files = write_reports(wf_dir)
+        except Exception as e:
+            report_error = str(e)
+            import sys
+            print(f"[WARN] Report generation failed for {workflow_id}: {e}", file=sys.stderr, flush=True)
+
+    # Build enrichment report
+    report = {
+        "enrichment_version": "2.1.0",
+        "enriched_at": now,
+        "workflow_id": workflow_id,
+        "dry_run": dry_run,
+        "migration_phase_a": {
+            "migrated_cases": migration_report.get("migrated_cases", 0),
+            "skipped_cases": migration_report.get("skipped_cases", 0),
+            "total_changes": migration_report.get("total_changes", 0),
+        },
+        "paper_enrichment": paper_enrichment_stats,
+        "enriched_cases": enriched_cases,
+        "skipped_cases": skipped_cases,
+        "per_case_changes": per_case_changes,
+        "reports_generated": list(report_files.keys()) if report_files else [],
+        **({"report_error": report_error} if report_error else {}),
+    }
+
+    if not dry_run:
+        report_dir = wf_dir / "00_metadata"
+        report_dir.mkdir(parents=True, exist_ok=True)
+        with open(report_dir / "enrichment_report.json", "w", encoding="utf-8") as f:
+            json.dump(report, f, indent=2, ensure_ascii=False)
+
+    return report

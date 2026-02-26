@@ -1,0 +1,126 @@
+{
+  "schema_version": "2.0.0",
+  "description": "Journal tier classification for PQA Journal Quality (JQ) axis scoring",
+  "scoring": {
+    "tier1": 0.9,
+    "tier2": 0.7,
+    "tier3": 0.5,
+    "preprint": 0.3,
+    "unknown": 0.3
+  },
+  "tiers": {
+    "tier1": {
+      "description": "Top-tier journals with rigorous peer review and high impact in life sciences/biotechnology",
+      "journals": [
+        "Nature",
+        "Science",
+        "Cell",
+        "Nature Methods",
+        "Nature Biotechnology",
+        "Nature Protocols",
+        "Nature Chemical Biology",
+        "Nature Communications",
+        "Science Advances",
+        "PNAS",
+        "Proceedings of the National Academy of Sciences",
+        "Nucleic Acids Research",
+        "Molecular Cell",
+        "Cell Reports",
+        "Genome Research",
+        "Genome Biology",
+        "EMBO Journal",
+        "eLife",
+        "ACS Synthetic Biology",
+        "Metabolic Engineering",
+        "Biotechnology and Bioengineering",
+        "Angewandte Chemie",
+        "Journal of the American Chemical Society",
+        "JACS",
+        "ACS Nano",
+        "Analytical Chemistry"
+      ]
+    },
+    "tier2": {
+      "description": "Well-established journals with solid peer review in relevant domains",
+      "journals": [
+        "PLoS ONE",
+        "PLoS Biology",
+        "PLoS Genetics",
+        "BMC Genomics",
+        "BMC Biotechnology",
+        "BMC Bioinformatics",
+        "Scientific Reports",
+        "Bioinformatics",
+        "Journal of Biological Chemistry",
+        "Protein Expression and Purification",
+        "Biotechniques",
+        "Methods in Enzymology",
+        "Journal of Molecular Biology",
+        "Biochemistry",
+        "FEBS Letters",
+        "FEBS Journal",
+        "Microbial Cell Factories",
+        "Applied and Environmental Microbiology",
+        "Journal of Bacteriology",
+        "Synthetic Biology",
+        "ACS Chemical Biology",
+        "Molecular Biology and Evolution",
+        "Plant Cell",
+        "Plant Journal",
+        "SLAS Discovery",
+        "SLAS Technology",
+        "Assay and Drug Development Technologies",
+        "Journal of Biotechnology",
+        "Applied Microbiology and Biotechnology",
+        "Enzyme and Microbial Technology",
+        "Frontiers in Bioengineering and Biotechnology",
+        "Frontiers in Microbiology",
+        "Frontiers in Genetics",
+        "Current Protocols in Molecular Biology",
+        "Current Protocols",
+        "Methods",
+        "Journal of Biological Methods",
+        "Lab on a Chip",
+        "Microfluidics and Nanofluidics"
+      ]
+    },
+    "tier3": {
+      "description": "Specialized or newer journals, still peer-reviewed",
+      "journals": [
+        "Journal of Visualized Experiments",
+        "JoVE",
+        "Bio-protocol",
+        "MethodsX",
+        "Data in Brief",
+        "F1000Research",
+        "PeerJ",
+        "MDPI journals",
+        "Molecules",
+        "International Journal of Molecular Sciences",
+        "Biology",
+        "Life",
+        "Genes",
+        "Cells",
+        "Microorganisms"
+      ]
+    },
+    "preprint": {
+      "description": "Preprint servers — not peer-reviewed",
+      "servers": [
+        "bioRxiv",
+        "medRxiv",
+        "arXiv",
+        "ChemRxiv",
+        "Research Square",
+        "SSRN",
+        "Preprints.org"
+      ]
+    }
+  },
+  "lookup_rules": {
+    "exact_match_first": true,
+    "case_insensitive": true,
+    "partial_match_for_series": true,
+    "notes": "If journal name contains a tier1/tier2 journal name as substring, use that tier. Otherwise default to 'unknown' score."
+  }
+}
