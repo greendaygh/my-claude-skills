@@ -1,5 +1,18 @@
 # Changelog — wf-audit
 
+## [2.2.0] — 2026-03-01
+
+### Added
+- **Content quality checks** in `score_paper_list()` — `full_text` field detection and duplicate DOI detection
+- `_check_paper_content_quality()` helper with `content_quality` and `duplicate` error types
+- Paper model enrichment fields: `abstract`, `enrichment_status`, `text_source`, `openalex_id`, `oa_status`, `cited_by_count`, `mesh_terms`
+- 5 new test cases for content quality scoring and enrichment field validation
+
+### Changed
+- `DetailedViolation.error_type` expanded with `content_quality` and `duplicate`
+- `score_paper_list()` refactored to combine schema validation with content quality checks
+- Content violations contribute to overall score penalty
+
 ## [2.1.0] — 2026-02-28
 
 ### Added

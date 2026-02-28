@@ -113,6 +113,52 @@ def score_case_card(case_data: dict, source_file: str = "") -> ScoredResult:
 # score_paper_list
 # ---------------------------------------------------------------------------
 
+def _check_paper_content_quality(
+    paper_data: dict, source_file: str,
+) -> list[DetailedViolation]:
+    """Detect data quality issues beyond schema: full_text, duplicate DOIs."""
+    violations: list[DetailedViolation] = []
+    papers = paper_data.get("papers", [])
+    if not isinstance(papers, list):
+        return violations
+
+    for i, p in enumerate(papers):
+        if not isinstance(p, dict):
+            continue
+        if "full_text" in p:
+            ft_len = len(p["full_text"]) if isinstance(p["full_text"], str) else 0
+            pid = p.get("paper_id", f"papers[{i}]")
+            violations.append(DetailedViolation(
+                file=source_file, record=pid,
+                path=f"papers.{i}.full_text",
+                error=f"full_text field ({ft_len} chars) should not be in paper catalog",
+                error_type="content_quality",
+                fix_hint="full_text 필드를 제거하세요. 전문은 별도 파일로 저장해야 합니다",
+            ))
+
+    doi_map: dict[str, list[tuple[int, str]]] = {}
+    for i, p in enumerate(papers):
+        if not isinstance(p, dict):
+            continue
+        doi = p.get("doi", "")
+        if doi:
+            doi_map.setdefault(doi, []).append(
+                (i, p.get("paper_id", f"papers[{i}]"))
+            )
+    for doi, entries in doi_map.items():
+        if len(entries) > 1:
+            pids = [pid for _, pid in entries]
+            violations.append(DetailedViolation(
+                file=source_file, record=pids[0],
+                path=f"papers (DOI: {doi})",
+                error=f"Duplicate DOI across papers: {', '.join(pids)}",
+                error_type="duplicate",
+                fix_hint=f"중복 논문을 제거하세요: {', '.join(pids[1:])}",
+            ))
+
+    return violations
+
+
 def score_paper_list(paper_data, source_file: str = "") -> ScoredResult:
     """Score paper_list.json against canonical PaperList model."""
     if not isinstance(paper_data, dict):
@@ -124,20 +170,20 @@ def score_paper_list(paper_data, source_file: str = "") -> ScoredResult:
         )
 
     record_id = paper_data.get("workflow_id", "unknown")
+    papers = paper_data.get("papers", [])
+    n_papers = len(papers) if isinstance(papers, list) else 0
+    total_fields = _count_required_fields(PaperList) + n_papers * _count_required_fields(Paper)
+
+    schema_errors = 0
+    detailed: list[DetailedViolation] = []
 
     try:
         PaperList.model_validate(paper_data)
-        return ScoredResult(
-            score=1.0, max_score=1.0,
-            violations=[], detailed_violations=[],
-            field_details={}, schema_group="canonical",
-        )
     except ValidationError as e:
+        schema_errors = len(e.errors())
         detailed = pydantic_errors_to_violations(
             e.errors(), source_file=source_file, record_id=record_id,
         )
-        # Enrich record info for per-paper errors
-        papers = paper_data.get("papers", [])
         for d in detailed:
             parts = d.path.split(".")
             if len(parts) >= 2 and parts[0] == "papers" and parts[1].isdigit():
@@ -147,17 +193,20 @@ def score_paper_list(paper_data, source_file: str = "") -> ScoredResult:
                     if isinstance(paper, dict):
                         d.record = paper.get("paper_id", paper.get("id", f"papers[{idx}]"))
 
-        violations = [f"{d.path}: {d.error}" for d in detailed]
-        total_fields = _count_required_fields(PaperList)
-        n_papers = len(papers) if isinstance(papers, list) else 0
-        total = total_fields + n_papers * _count_required_fields(Paper)
-        score = _score_from_errors(len(e.errors()), max(total, 1))
-        return ScoredResult(
-            score=score, max_score=1.0,
-            violations=violations,
-            detailed_violations=[d.to_dict() for d in detailed],
-            field_details={}, schema_group="canonical" if "papers" in paper_data else "unknown",
-        )
+    content_violations = _check_paper_content_quality(paper_data, source_file)
+    detailed.extend(content_violations)
+
+    all_error_count = schema_errors + len(content_violations)
+    violations = [f"{d.path}: {d.error}" for d in detailed]
+    score = _score_from_errors(all_error_count, max(total_fields, 1))
+    schema_group = "canonical" if "papers" in paper_data and schema_errors == 0 else "unknown"
+
+    return ScoredResult(
+        score=score, max_score=1.0,
+        violations=violations,
+        detailed_violations=[d.to_dict() for d in detailed],
+        field_details={}, schema_group=schema_group,
+    )
 
 
 # ---------------------------------------------------------------------------

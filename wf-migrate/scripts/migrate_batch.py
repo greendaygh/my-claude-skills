@@ -86,12 +86,24 @@ def migrate_batch(base_dir: Path, targets: list[str] = None,
 
         _blog(f"[{i+1}/{total}] {wf_id} starting...", verbose)
 
-        # Cooldown between workflows to avoid API burst
+        # Cooldown between workflows to avoid NCBI API burst/block
         if i > 0:
-            time.sleep(5)
-        if i > 0 and i % 10 == 0:
-            _blog(f"  [COOLDOWN] Pausing 30s after {i} workflows...", verbose)
-            time.sleep(30)
+            time.sleep(10)
+        if i > 0 and i % 5 == 0:
+            _blog(f"  [COOLDOWN] Pausing 60s after {i} workflows...", verbose)
+            time.sleep(60)
+            # NCBI connectivity check
+            import urllib.request as _ur
+            try:
+                _req = _ur.Request(
+                    "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=test&retmax=1",
+                    headers={"User-Agent": "wf-migrate/2.3"})
+                with _ur.urlopen(_req, timeout=10) as _resp:
+                    _resp.read()
+                _blog("  [OK] NCBI connectivity confirmed", verbose)
+            except Exception:
+                _blog("  [WARN] NCBI unreachable, waiting additional 120s...", verbose)
+                time.sleep(120)
 
         try:
             # Load pending audit violations for this workflow

@@ -230,6 +230,89 @@ def test_score_paper_list_missing_doi():
     assert len(doi_violation) > 0
 
 
+def test_score_paper_list_full_text_detected():
+    from scoring import score_paper_list
+    data = {
+        "workflow_id": "WB005",
+        "total_papers": 2,
+        "papers": [
+            {"paper_id": "P001", "doi": "10.1000/abc", "title": "T",
+             "authors": "A", "year": 2022, "journal": "S",
+             "full_text": "This is the entire text of the paper..." * 100},
+            {"paper_id": "P002", "doi": "10.1000/def", "title": "T2",
+             "authors": "B", "year": 2023, "journal": "N"},
+        ],
+    }
+    result = score_paper_list(data, source_file="paper_list.json")
+    assert result.score < 1.0
+    cq_violations = [d for d in result.detailed_violations if d["error_type"] == "content_quality"]
+    assert len(cq_violations) == 1
+    assert "full_text" in cq_violations[0]["path"]
+    assert cq_violations[0]["file"] == "paper_list.json"
+    assert cq_violations[0]["record"] == "P001"
+
+
+def test_score_paper_list_duplicate_doi():
+    from scoring import score_paper_list
+    data = {
+        "workflow_id": "WB005",
+        "total_papers": 3,
+        "papers": [
+            {"paper_id": "P001", "doi": "10.1000/abc", "title": "T",
+             "authors": "A", "year": 2022, "journal": "S"},
+            {"paper_id": "P002", "doi": "10.1000/abc", "title": "T2",
+             "authors": "B", "year": 2023, "journal": "N"},
+            {"paper_id": "P003", "doi": "10.1000/def", "title": "T3",
+             "authors": "C", "year": 2024, "journal": "X"},
+        ],
+    }
+    result = score_paper_list(data, source_file="paper_list.json")
+    assert result.score < 1.0
+    dup_violations = [d for d in result.detailed_violations if d["error_type"] == "duplicate"]
+    assert len(dup_violations) == 1
+    assert "Duplicate DOI" in dup_violations[0]["error"]
+    assert "P001" in dup_violations[0]["record"] or "P002" in dup_violations[0]["record"]
+
+
+def test_score_paper_list_full_text_and_dup_combined():
+    from scoring import score_paper_list
+    data = {
+        "workflow_id": "WB005",
+        "total_papers": 2,
+        "papers": [
+            {"paper_id": "P001", "doi": "10.1000/same", "title": "T",
+             "authors": "A", "year": 2022, "journal": "S",
+             "full_text": "Long text here..."},
+            {"paper_id": "P002", "doi": "10.1000/same", "title": "T2",
+             "authors": "B", "year": 2023, "journal": "N"},
+        ],
+    }
+    result = score_paper_list(data, source_file="paper_list.json")
+    assert result.score < 1.0
+    cq = [d for d in result.detailed_violations if d["error_type"] == "content_quality"]
+    dup = [d for d in result.detailed_violations if d["error_type"] == "duplicate"]
+    assert len(cq) == 1
+    assert len(dup) == 1
+
+
+def test_score_paper_list_no_content_issues():
+    """Clean paper_list should get perfect score."""
+    from scoring import score_paper_list
+    data = {
+        "workflow_id": "WB005",
+        "total_papers": 2,
+        "papers": [
+            {"paper_id": "P001", "doi": "10.1000/abc", "title": "T",
+             "authors": "A", "year": 2022, "journal": "S"},
+            {"paper_id": "P002", "doi": "10.1000/def", "title": "T2",
+             "authors": "B", "year": 2023, "journal": "N"},
+        ],
+    }
+    result = score_paper_list(data, source_file="paper_list.json")
+    assert result.score == 1.0
+    assert len(result.detailed_violations) == 0
+
+
 # ---------------------------------------------------------------------------
 # score_variant
 # ---------------------------------------------------------------------------

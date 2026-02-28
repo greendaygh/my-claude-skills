@@ -26,6 +26,13 @@ class Paper(BaseModel):
     access_tier: Optional[int] = None
     access_method: Optional[str] = None
     relevance: Optional[str] = None
+    abstract: Optional[str] = None
+    enrichment_status: Optional[str] = None
+    text_source: Optional[str] = None
+    openalex_id: Optional[str] = None
+    oa_status: Optional[str] = None
+    cited_by_count: Optional[int] = None
+    mesh_terms: Optional[list[str]] = None
 
 
 class PaperList(BaseModel):

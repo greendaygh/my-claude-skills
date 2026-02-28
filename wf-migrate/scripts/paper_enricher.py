@@ -7,6 +7,7 @@ authors, MeSH terms) from NCBI APIs. Includes DOI validation and correction.
 import json
 import os
 import re
+import socket
 import sys
 import time
 import urllib.error
@@ -34,7 +35,12 @@ _REQUEST_DELAY = 0.15 if _NCBI_API_KEY else 0.4  # seconds between requests
 _NCBI_EUTILS_BASE = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils"
 _NCBI_ID_CONVERTER = "https://www.ncbi.nlm.nih.gov/pmc/utils/idconv/v1.0/"
 
-_USER_AGENT = "wf-migrate/2.2 (purpose: academic-workflow-enrichment)"
+_USER_AGENT = "wf-migrate/2.3 (purpose: academic-workflow-enrichment)"
+
+if not _NCBI_API_KEY:
+    print("[WARN] No NCBI_API_KEY set. Rate limit: 3 req/sec. "
+          "Get one at https://www.ncbi.nlm.nih.gov/account/settings/",
+          file=sys.stderr, flush=True)
 
 # Europe PMC batch limit per run (policy: no bulk automated downloads)
 _EUROPEPMC_BATCH_LIMIT = 50
@@ -98,23 +104,38 @@ def _ncbi_url(url: str) -> str:
 
 
 def _http_get(url: str, timeout: int = 15, max_retries: int = 3) -> str:
-    """HTTP GET with adaptive retry on 429. Returns '' on failure."""
+    """HTTP GET with adaptive retry on 429/network errors. Returns '' on failure.
+
+    Uses socket-level timeout to prevent TCP SYN-SENT hangs (OS default ~2min).
+    Handles 403/503 as server block signals.
+    """
     url = _ncbi_url(url)
-    for attempt in range(max_retries):
-        try:
-            req = urllib.request.Request(url, headers={"User-Agent": _USER_AGENT})
-            with urllib.request.urlopen(req, timeout=timeout) as resp:
-                return resp.read().decode("utf-8")
-        except urllib.error.HTTPError as e:
-            if e.code == 429:
-                wait = min(2 ** attempt * 2, 30)  # 2s, 4s, 8s... max 30s
-                print(f"  [429] Rate limited, waiting {wait}s (attempt {attempt+1}/{max_retries})...", flush=True)
-                time.sleep(wait)
-                continue
-            return ""
-        except (urllib.error.URLError, OSError, TimeoutError):
-            return ""
-    return ""
+    old_timeout = socket.getdefaulttimeout()
+    socket.setdefaulttimeout(timeout)  # TCP-level timeout 보장
+    try:
+        for attempt in range(max_retries):
+            try:
+                req = urllib.request.Request(url, headers={"User-Agent": _USER_AGENT})
+                with urllib.request.urlopen(req, timeout=timeout) as resp:
+                    return resp.read().decode("utf-8")
+            except urllib.error.HTTPError as e:
+                if e.code == 429:
+                    wait = min(2 ** attempt * 2, 30)  # 2s, 4s, 8s... max 30s
+                    print(f"  [429] Rate limited, waiting {wait}s (attempt {attempt+1}/{max_retries})...", flush=True)
+                    time.sleep(wait)
+                    continue
+                if e.code in (403, 503):
+                    print(f"  [{e.code}] Server blocked/unavailable, skipping", flush=True)
+                    return ""
+                return ""
+            except (urllib.error.URLError, OSError, TimeoutError, socket.timeout):
+                if attempt < max_retries - 1:
+                    time.sleep(2 ** attempt)  # backoff on connection failure
+                    continue
+                return ""
+        return ""
+    finally:
+        socket.setdefaulttimeout(old_timeout)
 
 
 def resolve_pmid_from_doi(doi: str) -> dict:
@@ -395,11 +416,25 @@ def enrich_paper_list(paper_data: dict | list, rate_delay: float = _REQUEST_DELA
     normalized = normalize_paper_list(paper_data)
     papers = normalized.get("papers", [])
 
+    consecutive_failures = 0
+    adaptive_delay = rate_delay
+    skipped_count = 0
+
     for paper in papers:
+        # Idempotency: skip already-enriched papers (PMID + substantial abstract)
+        if (paper.get("pmid") and paper.get("abstract")
+                and len(paper.get("abstract", "")) > 50):
+            if paper.get("enrichment_status") != "failed":
+                skipped_count += 1
+                continue
+
         pmid = str(paper.get("pmid", "")).strip()
         pmcid = str(paper.get("pmcid", "")).strip()
         doi = str(paper.get("doi", "")).strip()
         title = str(paper.get("title", "")).strip()
+
+        # api_failure tracks actual network/server errors, NOT "paper not found"
+        api_failure = False
 
         # Step 1: Resolve PMID + PMCID from DOI if missing
         if not pmid and doi:
@@ -407,22 +442,24 @@ def enrich_paper_list(paper_data: dict | list, rate_delay: float = _REQUEST_DELA
             pmid = id_result.get("pmid", "")
             if pmid:
                 paper["pmid"] = pmid
+            # "not found" is normal — not an API failure
             if not pmcid and id_result.get("pmcid"):
                 pmcid = id_result["pmcid"]
                 paper["pmcid"] = pmcid
-            time.sleep(rate_delay)
+            time.sleep(adaptive_delay)
 
         # Step 2: Search by title if still no PMID
         if not pmid and title:
             pmid = search_pmid_by_title(title)
             if pmid:
                 paper["pmid"] = pmid
-            time.sleep(rate_delay)
+            # "not found" is normal — not an API failure
+            time.sleep(adaptive_delay)
 
         # Step 3: Fetch PubMed details
         if pmid:
             details = fetch_pubmed_details(pmid)
-            time.sleep(rate_delay)
+            time.sleep(adaptive_delay)
 
             if details:
                 # Merge: only fill in missing/empty fields
@@ -433,7 +470,9 @@ def enrich_paper_list(paper_data: dict | list, rate_delay: float = _REQUEST_DELA
 
                 paper["enrichment_status"] = "enriched"
             else:
+                # Had PMID but got no details → likely API issue
                 paper["enrichment_status"] = "partial"
+                api_failure = True
         else:
             paper["enrichment_status"] = "failed"
 
@@ -441,13 +480,13 @@ def enrich_paper_list(paper_data: dict | list, rate_delay: float = _REQUEST_DELA
         if pmcid:
             text_source = "abstract_only"
             full_text = fetch_pmc_fulltext(pmcid)
-            time.sleep(rate_delay)
+            time.sleep(adaptive_delay)
 
             if full_text:
                 text_source = "pmc_oa"
             else:
                 full_text = fetch_europepmc_fulltext(pmcid)
-                time.sleep(rate_delay)
+                time.sleep(adaptive_delay)
                 if full_text:
                     text_source = "europepmc"
 
@@ -456,6 +495,28 @@ def enrich_paper_list(paper_data: dict | list, rate_delay: float = _REQUEST_DELA
             paper["text_source"] = text_source
         else:
             paper["text_source"] = "abstract_only"
+
+        # Adaptive rate limiting: only track actual API/network failures
+        if api_failure:
+            consecutive_failures += 1
+            if consecutive_failures >= 3:
+                print("  [ADAPTIVE] 3+ consecutive failures, pausing 60s...", flush=True)
+                time.sleep(60)
+                # Connectivity check
+                test = _http_get(
+                    f"{_NCBI_EUTILS_BASE}/esearch.fcgi?db=pubmed&term=test&retmax=1",
+                    timeout=10, max_retries=1)
+                if not test:
+                    print("  [BLOCKED] NCBI unreachable, skipping remaining papers", flush=True)
+                    break
+                consecutive_failures = 0
+                adaptive_delay = min(adaptive_delay * 2, 3.0)
+        else:
+            consecutive_failures = 0
+            adaptive_delay = max(adaptive_delay * 0.9, rate_delay)
+
+    if skipped_count:
+        print(f"  [SKIP] {skipped_count} already-enriched papers skipped", flush=True)
 
     # Step 5: DOI validation and correction (post-enrichment)
     if _HAS_DOI_VALIDATOR:

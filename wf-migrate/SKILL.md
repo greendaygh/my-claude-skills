@@ -7,7 +7,7 @@ description: >
   targeted fixes; Phase B enriches case cards with PubMed paper metadata
   and regenerates reports. All phases run automatically on every invocation.
   Fix results are recorded in audit_report.json to avoid redundant re-processing.
-version: 2.2.0
+version: 2.4.0
 author: SBLab KRIBB
 tags: [biofoundry, workflow, migration, schema-upgrade, enrichment, audit-fix]
 ---

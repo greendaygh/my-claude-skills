@@ -1,5 +1,36 @@
 # Changelog
 
+## [1.6.0] — 2026-03-01
+
+### wf-audit (2.2.0)
+
+#### Added
+- **Content quality checks** in `score_paper_list()` — detects `full_text` fields that should be stored separately and duplicate DOIs
+- `_check_paper_content_quality()` helper with `content_quality` and `duplicate` error types
+- Paper model enrichment fields: `abstract`, `enrichment_status`, `text_source`, `openalex_id`, `oa_status`, `cited_by_count`, `mesh_terms`
+- Tests for enrichment field validation and content quality scoring (5 new test cases)
+
+#### Changed
+- `DetailedViolation.error_type` expanded with `content_quality` and `duplicate` types
+- `score_paper_list()` refactored to combine schema validation with content quality checks
+- Content violations now contribute to overall score penalty
+
+### wf-migrate (2.4.0)
+
+#### Added
+- **Adaptive rate limiting** in `paper_enricher.py` — tracks consecutive API failures, auto-increases delay, pauses 60s after 3+ failures
+- **NCBI connectivity check** after consecutive failures and in batch cooldown periods
+- **Idempotent enrichment** — skips papers already enriched (PMID + abstract > 50 chars)
+- Socket-level timeout (`socket.setdefaulttimeout`) to prevent TCP SYN-SENT hangs
+- HTTP 403/503 handling as server block signals
+- Network error backoff retry in `_http_get()`
+- API key warning at module load if `NCBI_API_KEY` not set
+
+#### Changed
+- Batch cooldown increased: 10s between workflows, 60s every 5 workflows (was 5s/30s per 10)
+- NCBI connectivity probe after cooldown with 120s additional wait on failure
+- User-Agent bumped to `wf-migrate/2.3`
+
 ## [1.5.0] — 2026-02-28
 
 ### wf-output (2.2.0)

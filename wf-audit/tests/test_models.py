@@ -147,6 +147,43 @@ class TestPaperList:
         with pytest.raises(ValidationError):
             PaperList.model_validate(data)
 
+    def test_enrichment_fields_accepted(self):
+        from models import Paper
+        data = {
+            "paper_id": "P001",
+            "doi": "10.1000/abc",
+            "title": "Test",
+            "authors": "Smith J",
+            "year": 2023,
+            "journal": "Nature",
+            "abstract": "A brief summary of the paper.",
+            "enrichment_status": "enriched",
+            "text_source": "pmc_oa",
+            "openalex_id": "https://openalex.org/W123",
+            "oa_status": "gold",
+            "cited_by_count": 42,
+            "mesh_terms": ["DNA", "Extraction"],
+        }
+        obj = Paper.model_validate(data)
+        assert obj.abstract == "A brief summary of the paper."
+        assert obj.enrichment_status == "enriched"
+        assert obj.cited_by_count == 42
+        assert obj.mesh_terms == ["DNA", "Extraction"]
+
+    def test_enrichment_fields_optional(self):
+        from models import Paper
+        data = {
+            "paper_id": "P001",
+            "doi": "10.1000/abc",
+            "title": "Test",
+            "authors": "Smith J",
+            "year": 2023,
+            "journal": "Nature",
+        }
+        obj = Paper.model_validate(data)
+        assert obj.abstract is None
+        assert obj.mesh_terms is None
+
 
 # ---------------------------------------------------------------------------
 # CaseCard

@@ -15,7 +15,7 @@ class DetailedViolation:
     record: str = ""
     path: str = ""
     error: str = ""
-    error_type: str = ""  # "missing" | "wrong_type" | "pattern_mismatch" | "value_error"
+    error_type: str = ""  # "missing" | "wrong_type" | "pattern_mismatch" | "value_error" | "content_quality" | "duplicate"
     fix_hint: str = ""
 
     def to_dict(self) -> dict:

@@ -1,5 +1,21 @@
 # Changelog — wf-migrate
 
+## [2.4.0] — 2026-03-01
+
+### Added
+- **Adaptive rate limiting** — tracks consecutive API failures, auto-increases delay, pauses 60s after 3+ failures
+- **NCBI connectivity check** after consecutive failures and in batch cooldown periods
+- **Idempotent enrichment** — skips already-enriched papers (PMID + abstract > 50 chars)
+- Socket-level timeout to prevent TCP SYN-SENT hangs
+- HTTP 403/503 handling as server block signals
+- Network error backoff retry in `_http_get()`
+- API key warning at module load if `NCBI_API_KEY` not set
+
+### Changed
+- Batch cooldown: 10s between workflows, 60s every 5 (was 5s/30s per 10)
+- NCBI connectivity probe with 120s additional wait on failure
+- User-Agent bumped to `wf-migrate/2.3`
+
 ## [2.3.0] — 2026-02-28
 
 ### Added
