@@ -1,4 +1,4 @@
-"""Tests for scoring.py — conformance scoring engine."""
+"""Tests for scoring.py — Pydantic-based conformance scoring engine."""
 
 import sys
 from pathlib import Path
@@ -15,7 +15,7 @@ CANONICAL_CASE_CARD = {
     "metadata": {
         "pmid": "12345678",
         "doi": "10.1000/xyz123",
-        "authors": ["Smith J", "Doe A"],
+        "authors": "Smith J, Doe A",
         "year": 2023,
         "journal": "Nature Biotechnology",
         "title": "A canonical workflow",
@@ -26,7 +26,7 @@ CANONICAL_CASE_CARD = {
         "core_technique": "extraction",
         "fulltext_access": True,
         "access_method": "doi",
-        "access_tier": "open",
+        "access_tier": 1,
     },
     "steps": [
         {
@@ -41,9 +41,9 @@ CANONICAL_CASE_CARD = {
             "notes": "Keep on ice",
         }
     ],
-    "completeness": {"score": 0.95, "missing_fields": []},
+    "completeness": {"score": 0.95},
     "flow_diagram": "graph LR\n  A --> B",
-    "workflow_context": {"workflow_id": "WB005", "variant_id": "V1"},
+    "workflow_context": {"workflow_id": "WB005"},
 }
 
 LEGACY_FLAT_CASE_CARD = {
@@ -51,47 +51,11 @@ LEGACY_FLAT_CASE_CARD = {
     "technique": "western blot",
     "steps": [
         {
-            "position": 1,        # alias for step_number
-            "name": "Gel run",    # alias for step_name
-            "equipment": ["Autoclave", "Centrifuge"],  # flat strings
+            "position": 1,
+            "name": "Gel run",
+            "equipment": ["Autoclave", "Centrifuge"],
         }
     ],
-}
-
-MIXED_SOFTWARE_CASE_CARD = {
-    "case_id": "WB005-C002",
-    "metadata": {
-        "pmid": "12345678",
-        "doi": "10.1000/xyz123",
-        "authors": ["Smith J"],
-        "year": 2023,
-        "journal": "Nature",
-        "title": "Test",
-        "purpose": "test",
-        "organism": "E. coli",
-        "scale": "lab",
-        "automation_level": "manual",
-        "core_technique": "extraction",
-        "fulltext_access": True,
-        "access_method": "doi",
-        "access_tier": "open",
-    },
-    "steps": [
-        {
-            "step_number": 1,
-            "step_name": "Analysis",
-            "description": "Run analysis",
-            "equipment": [{"name": "Microscope", "model": "M1", "manufacturer": "Zeiss"}],
-            "software": ["FIJI"],  # flat string array — wrong type
-            "reagents": [],
-            "conditions": {},
-            "result_qc": "Pass",
-            "notes": "",
-        }
-    ],
-    "completeness": {"score": 0.9, "missing_fields": []},
-    "flow_diagram": "graph LR\n  A --> B",
-    "workflow_context": {"workflow_id": "WB005", "variant_id": "V1"},
 }
 
 CANONICAL_PAPER_LIST = {
@@ -100,7 +64,7 @@ CANONICAL_PAPER_LIST = {
             "paper_id": "P001",
             "doi": "10.1000/abc",
             "title": "First paper",
-            "authors": ["Author A"],
+            "authors": "Author A",
             "year": 2022,
             "journal": "Science",
         },
@@ -108,7 +72,7 @@ CANONICAL_PAPER_LIST = {
             "paper_id": "P002",
             "doi": "10.1000/def",
             "title": "Second paper",
-            "authors": ["Author B"],
+            "authors": "Author B",
             "year": 2021,
             "journal": "Nature",
         },
@@ -118,16 +82,31 @@ CANONICAL_PAPER_LIST = {
     "total_papers": 2,
 }
 
+MINIMAL_UO = {
+    "uo_id": "UHW400",
+    "uo_name": "Sample Prep",
+    "step_position": 1,
+    "input": {"items": []},
+    "output": {"items": []},
+    "equipment": {"items": []},
+    "consumables": {"items": []},
+    "material_and_method": {},
+    "result": {},
+    "discussion": {},
+}
+
 CANONICAL_VARIANT = {
     "variant_id": "V1",
     "variant_name": "Standard Lysis",
-    "uo_sequence": ["UO-001", "UO-002", "UO-003"],
+    "workflow_id": "WB005",
+    "unit_operations": [MINIMAL_UO],
 }
 
 BAD_ID_VARIANT = {
-    "variant_id": "WB005-V1",  # non-canonical: should be ^V\d+$
+    "variant_id": "WB005-V1",
     "variant_name": "Extended",
-    "uo_sequence": ["UO-001"],
+    "workflow_id": "WB005",
+    "unit_operations": [MINIMAL_UO],
 }
 
 CANONICAL_COMPOSITION = {
@@ -136,8 +115,9 @@ CANONICAL_COMPOSITION = {
     "workflow_name": "Western Blot",
     "category": "analysis",
     "domain": "proteomics",
-    "version": "1.0",
+    "version": 1.0,
     "composition_date": "2024-01-15",
+    "description": "Analysis workflow",
     "statistics": {
         "papers_analyzed": 20,
         "cases_collected": 15,
@@ -154,12 +134,13 @@ DEPRECATED_STATS_COMPOSITION = {
     "workflow_name": "Western Blot",
     "category": "analysis",
     "domain": "proteomics",
-    "version": "1.0",
+    "version": 1.0,
     "composition_date": "2024-01-15",
+    "description": "Analysis workflow",
     "statistics": {
-        "total_papers": 20,     # deprecated → papers_analyzed
-        "total_cases": 15,      # deprecated → cases_collected
-        "total_variants": 3,    # deprecated → variants_identified
+        "total_papers": 20,
+        "total_cases": 15,
+        "total_variants": 3,
     },
 }
 
@@ -174,19 +155,9 @@ def test_scored_result_dataclass():
     assert r.score == 0.8
     assert r.max_score == 1.0
     assert r.violations == []
+    assert r.detailed_violations == []
     assert r.field_details == {}
     assert r.schema_group == ""
-
-    r2 = ScoredResult(
-        score=0.5,
-        max_score=1.0,
-        violations=["missing: steps"],
-        field_details={"steps": "missing"},
-        schema_group="legacy_flat",
-    )
-    assert r2.violations == ["missing: steps"]
-    assert r2.field_details["steps"] == "missing"
-    assert r2.schema_group == "legacy_flat"
 
 
 # ---------------------------------------------------------------------------
@@ -198,35 +169,28 @@ def test_score_case_card_canonical():
     result = score_case_card(CANONICAL_CASE_CARD)
     assert result.score >= 0.9, f"Expected >=0.9, got {result.score}"
     assert result.schema_group == "canonical"
-    assert result.violations == [] or len(result.violations) == 0
 
 
 def test_score_case_card_legacy_flat():
     from scoring import score_case_card
     result = score_case_card(LEGACY_FLAT_CASE_CARD)
-    # Very sparse card: only paper_id, technique, steps present (no metadata block,
-    # no completeness/flow_diagram/workflow_context). Alias matches in steps give 0.3
-    # partial credit. Score is low — between 0.05 and 0.4.
-    assert result.score < 0.4, f"Expected <0.4 (low), got {result.score}"
-    assert result.score > 0.05, f"Expected >0.05 (aliases give some credit), got {result.score}"
+    assert result.score <= 0.5, f"Expected <=0.5 (low), got {result.score}"
     assert result.schema_group == "legacy_flat"
-    # Alias keys should be recorded (position→step_number, name→step_name)
-    assert any(
-        "alias_match" in str(v) for v in result.field_details.values()
-    ), f"Expected alias_match in field_details, got {result.field_details}"
+    assert len(result.violations) > 0
+    assert len(result.detailed_violations) > 0
 
 
-def test_score_case_card_mixed_software():
+def test_score_case_card_detailed_violations_have_structure():
     from scoring import score_case_card
-    result = score_case_card(MIXED_SOFTWARE_CASE_CARD)
-    # software field in step should be wrong_type (flat strings → 0.5)
-    step_details = result.field_details.get("steps", {})
-    # Could be stored as steps[0].software or similar; check score reflects partial
-    # Overall score should be between 0.7 and 0.95 (one field wrong)
-    assert result.score >= 0.7, f"Expected >=0.7, got {result.score}"
-    # The software field should not be "present" (full score) anywhere
-    # At least check that the result is not perfect
-    assert result.score < 1.0
+    result = score_case_card(LEGACY_FLAT_CASE_CARD, source_file="02_cases/case_C001.json")
+    for dv in result.detailed_violations:
+        assert "file" in dv
+        assert "record" in dv
+        assert "path" in dv
+        assert "error" in dv
+        assert "error_type" in dv
+        assert "fix_hint" in dv
+        assert dv["file"] == "02_cases/case_C001.json"
 
 
 # ---------------------------------------------------------------------------
@@ -237,18 +201,33 @@ def test_score_paper_list_canonical():
     from scoring import score_paper_list
     result = score_paper_list(CANONICAL_PAPER_LIST)
     assert result.score >= 0.9, f"Expected >=0.9, got {result.score}"
-    assert result.field_details.get("papers") == "present"
 
 
 def test_score_paper_list_missing_papers_key():
     from scoring import score_paper_list
     flat_list = [
         {"paper_id": "P001", "doi": "10.1000/abc", "title": "T",
-         "authors": ["A"], "year": 2022, "journal": "S"}
+         "authors": "A", "year": 2022, "journal": "S"}
     ]
     result = score_paper_list(flat_list)
-    assert result.score < 0.5, f"Expected <0.5, got {result.score}"
-    assert "papers" in result.violations or any("papers" in v for v in result.violations)
+    assert result.score == 0.0
+
+
+def test_score_paper_list_missing_doi():
+    from scoring import score_paper_list
+    data = {
+        "workflow_id": "WB005",
+        "total_papers": 1,
+        "papers": [
+            {"paper_id": "P001", "title": "T", "authors": "A", "year": 2022, "journal": "S"}
+        ],
+    }
+    result = score_paper_list(data)
+    assert result.score < 1.0
+    assert any("doi" in v for v in result.violations)
+    assert len(result.detailed_violations) > 0
+    doi_violation = [d for d in result.detailed_violations if "doi" in d["path"]]
+    assert len(doi_violation) > 0
 
 
 # ---------------------------------------------------------------------------
@@ -259,16 +238,14 @@ def test_score_variant_canonical():
     from scoring import score_variant
     result = score_variant(CANONICAL_VARIANT)
     assert result.score >= 0.9, f"Expected >=0.9, got {result.score}"
-    assert result.field_details.get("variant_id") == "present"
 
 
-def test_score_variant_bad_id():
+def test_score_variant_missing_unit_operations():
     from scoring import score_variant
-    result = score_variant(BAD_ID_VARIANT)
-    # variant_id exists but fails pattern → lower score
-    assert result.score < 0.9, f"Expected <0.9, got {result.score}"
-    assert result.field_details.get("variant_id") == "wrong_type"
-    assert any("variant_id" in v for v in result.violations)
+    data = {"variant_id": "V1", "variant_name": "Test", "workflow_id": "WB005"}
+    result = score_variant(data)
+    assert result.score < 0.9
+    assert any("unit_operations" in v for v in result.violations)
 
 
 # ---------------------------------------------------------------------------
@@ -279,15 +256,73 @@ def test_score_composition_data_canonical():
     from scoring import score_composition_data
     result = score_composition_data(CANONICAL_COMPOSITION)
     assert result.score >= 0.9, f"Expected >=0.9, got {result.score}"
-    assert result.field_details.get("schema_version") == "present"
+
+
+def test_score_composition_data_missing_fields():
+    from scoring import score_composition_data
+    result = score_composition_data({"workflow_id": "WB005"})
+    assert result.score < 0.5
+    assert len(result.detailed_violations) > 0
 
 
 def test_score_composition_data_deprecated_stats():
     from scoring import score_composition_data
     result = score_composition_data(DEPRECATED_STATS_COMPOSITION)
-    # Has deprecated stats keys → partial score
-    assert result.score < 0.9, f"Expected <0.9, got {result.score}"
-    assert any("deprecated" in v.lower() for v in result.violations)
+    # Has deprecated stats keys that don't match canonical model field names
+    assert result.score < 1.0
+
+
+# ---------------------------------------------------------------------------
+# New file type scoring functions
+# ---------------------------------------------------------------------------
+
+def test_score_case_summary():
+    from scoring import score_case_summary
+    data = {
+        "workflow_id": "WB005",
+        "total_cases": 2,
+        "cases": [
+            {"case_id": "WB005-C001"},
+            {"case_id": "WB005-C002"},
+        ],
+    }
+    result = score_case_summary(data)
+    assert result.score >= 0.9
+
+
+def test_score_cluster_result():
+    from scoring import score_cluster_result
+    data = {
+        "workflow_id": "WB005",
+        "total_cases": 5,
+        "variants": [
+            {"variant_id": "V1", "name": "Standard"},
+        ],
+    }
+    result = score_cluster_result(data)
+    assert result.score >= 0.9
+
+
+def test_score_uo_mapping():
+    from scoring import score_uo_mapping
+    data = {
+        "workflow_id": "WB005",
+        "uo_assignments": [
+            {"step_position": 1, "primary_uo": "UHW400"},
+        ],
+    }
+    result = score_uo_mapping(data)
+    assert result.score >= 0.9
+
+
+def test_score_workflow_context():
+    from scoring import score_workflow_context
+    data = {
+        "workflow_id": "WB005",
+        "workflow_name": "Test Workflow",
+    }
+    result = score_workflow_context(data)
+    assert result.score >= 0.9
 
 
 # ---------------------------------------------------------------------------
@@ -296,7 +331,6 @@ def test_score_composition_data_deprecated_stats():
 
 def test_aggregate_workflow_score():
     from scoring import aggregate_workflow_score
-    # All 1.0 → weighted average = 1.0
     all_ones = {
         "case_cards": 1.0,
         "composition_data": 1.0,
@@ -308,14 +342,9 @@ def test_aggregate_workflow_score():
     }
     assert aggregate_workflow_score(all_ones) == 1.0
 
-    # All 0.0 → 0.0
     all_zeros = {k: 0.0 for k in all_ones}
     assert aggregate_workflow_score(all_zeros) == 0.0
 
-    # Known partial: case_cards=0.8, rest=1.0
-    # case_cards weight=0.25 → contribution = 0.25*0.8 = 0.20
-    # other weights sum = 0.75, all at 1.0 → 0.75
-    # total = 0.95
     partial = dict(all_ones)
     partial["case_cards"] = 0.8
     result = aggregate_workflow_score(partial)

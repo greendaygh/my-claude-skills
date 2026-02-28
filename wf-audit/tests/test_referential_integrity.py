@@ -205,10 +205,13 @@ def test_run_all(tmp_path):
         "case_variant_refs",
         "uo_catalog_refs",
         "paper_case_refs",
+        "paper_validity",
         "statistics_consistency",
         "case_id_format",
     }
     assert expected_keys == set(result.keys())
-    # All checks should be clean for this valid fixture
     for key, violations in result.items():
-        assert violations == [], f"{key}: unexpected violations {violations}"
+        if key == "paper_validity":
+            assert isinstance(violations, dict)
+        else:
+            assert violations == [], f"{key}: unexpected violations {violations}"

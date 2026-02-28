@@ -1,15 +1,31 @@
-"""Conformance scoring engine for workflow audit (0.0-1.0 scale)."""
+"""Conformance scoring engine for workflow audit (0.0-1.0 scale).
+
+Uses Pydantic v2 models as the single source of truth for canonical schemas.
+Each score_* function validates data against its Pydantic model and converts
+ValidationErrors into scored results with detailed violation locations.
+"""
 
 from dataclasses import dataclass, field
 import re
-from canonical_schemas import (
-    CASE_CARD,
-    PAPER_LIST,
-    VARIANT,
-    COMPOSITION_DATA,
-    CASE_ID_PATTERN,
-    STEP_KEY_ALIASES,
+
+from pydantic import ValidationError
+
+from models import (
+    CaseCard,
+    CaseSummary,
+    ClusterResult,
+    CommonPattern,
+    CompositionData,
+    ParameterRanges,
+    Paper,
+    PaperList,
+    QcCheckpoints,
+    StepAlignment,
+    UoMapping,
+    Variant,
+    WorkflowContext,
 )
+from models.base import DetailedViolation, pydantic_errors_to_violations
 
 
 @dataclass
@@ -17,52 +33,31 @@ class ScoredResult:
     score: float                                         # 0.0-1.0
     max_score: float
     violations: list = field(default_factory=list)
-    field_details: dict = field(default_factory=dict)   # {field: "present"|"missing"|"wrong_type"|"alias_match"}
-    schema_group: str = ""                               # "canonical", "legacy_flat", "wt_extended", etc.
+    detailed_violations: list = field(default_factory=list)
+    field_details: dict = field(default_factory=dict)
+    schema_group: str = ""
 
 
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
 
-def _alias_map() -> dict:
-    """Build reverse alias map: alias_key -> canonical_key."""
-    rev = {}
-    for canonical, aliases in STEP_KEY_ALIASES.items():
-        for alias in aliases:
-            rev[alias] = canonical
-    return rev
+def _count_required_fields(model_cls) -> int:
+    """Count required (non-optional) fields in a Pydantic model."""
+    count = 0
+    for f_info in model_cls.model_fields.values():
+        if f_info.is_required():
+            count += 1
+    return count
 
 
-_REVERSE_ALIASES = _alias_map()
-
-
-def _score_item_list(items, required_keys: list, field_name: str) -> tuple:
-    """Score a list of items (equipment or software).
-
-    Returns (score 0.0-1.0, detail string).
-    - list of dicts with all required keys → 1.0, "present"
-    - list of strings (flat) → 0.5, "wrong_type"
-    - missing / empty / wrong structure → 0.0, "missing"
-    """
-    if not isinstance(items, list) or len(items) == 0:
-        return 0.0, "missing"
-    if all(isinstance(i, str) for i in items):
-        return 0.5, "wrong_type"
-    if all(isinstance(i, dict) for i in items):
-        # Check that required keys exist in each dict
-        all_have_keys = all(
-            all(k in item for k in required_keys) for item in items
-        )
-        if all_have_keys:
-            return 1.0, "present"
-        return 0.5, "wrong_type"
-    # Mixed list
-    return 0.5, "wrong_type"
+def _score_from_errors(error_count: int, total_fields: int) -> float:
+    if total_fields == 0:
+        return 1.0
+    return max(0.0, round(1.0 - error_count / total_fields, 4))
 
 
 def _classify_case_card(data: dict) -> str:
-    """Classify schema_group for a case card."""
     has_metadata = "metadata" in data
     has_completeness = "completeness" in data
     has_flow = "flow_diagram" in data
@@ -87,347 +82,212 @@ def _classify_case_card(data: dict) -> str:
 # score_case_card
 # ---------------------------------------------------------------------------
 
-def score_case_card(case_data: dict) -> ScoredResult:
-    """Score a case card for canonical conformance.
-
-    Scoring weights are equal per top-level field and per step field.
-    """
-    violations = []
-    field_details = {}
+def score_case_card(case_data: dict, source_file: str = "") -> ScoredResult:
+    """Score a case card against canonical CaseCard model."""
     schema_group = _classify_case_card(case_data)
+    record_id = case_data.get("case_id", "unknown")
 
-    # --- Top-level required fields ---
-    top_required = CASE_CARD["required_top_level"]
-    top_scores = []
-    for key in top_required:
-        if key in case_data:
-            field_details[key] = "present"
-            top_scores.append(1.0)
-        else:
-            # Check alias
-            alias_found = None
-            for ak, canonical in _REVERSE_ALIASES.items():
-                if canonical == key and ak in case_data:
-                    alias_found = ak
-                    break
-            if alias_found:
-                field_details[key] = "alias_match"
-                top_scores.append(0.3)
-                violations.append(f"alias: '{alias_found}' used instead of '{key}'")
-            else:
-                field_details[key] = "missing"
-                top_scores.append(0.0)
-                violations.append(f"missing: {key}")
-
-    # --- Metadata fields ---
-    meta_scores = []
-    if "metadata" in case_data and isinstance(case_data["metadata"], dict):
-        metadata = case_data["metadata"]
-        for mkey in CASE_CARD["metadata_required"]:
-            if mkey in metadata:
-                meta_scores.append(1.0)
-            else:
-                meta_scores.append(0.0)
-                violations.append(f"missing metadata field: {mkey}")
-    else:
-        # No metadata block at all
-        meta_scores = [0.0] * len(CASE_CARD["metadata_required"])
-
-    # --- Step fields ---
-    step_scores = []
-    steps = case_data.get("steps", [])
-    if isinstance(steps, list) and len(steps) > 0:
-        for step in steps:
-            if not isinstance(step, dict):
-                step_scores.append(0.0)
-                continue
-            step_field_scores = []
-            for skey in CASE_CARD["step_required"]:
-                if skey == "equipment":
-                    val = step.get("equipment")
-                    if val is None:
-                        # Check alias — equipment has no alias, just missing
-                        step_field_scores.append(0.0)
-                        violations.append("missing step field: equipment")
-                    else:
-                        sc, detail = _score_item_list(val, CASE_CARD["equipment_item"], "equipment")
-                        step_field_scores.append(sc)
-                        if detail == "wrong_type":
-                            violations.append("step equipment: wrong_type (flat strings)")
-                        field_details["step.equipment"] = detail
-                elif skey == "software":
-                    val = step.get("software")
-                    if val is None:
-                        # Check alias
-                        alias_val = None
-                        for ak, canonical in _REVERSE_ALIASES.items():
-                            if canonical == skey and ak in step:
-                                alias_val = step[ak]
-                                break
-                        if alias_val is not None:
-                            sc, detail = _score_item_list(alias_val, CASE_CARD["software_item"], "software")
-                            step_field_scores.append(0.3 * sc if sc == 1.0 else 0.3)
-                            field_details["step.software"] = "alias_match"
-                        else:
-                            step_field_scores.append(0.0)
-                            violations.append("missing step field: software")
-                            field_details["step.software"] = "missing"
-                    else:
-                        sc, detail = _score_item_list(val, CASE_CARD["software_item"], "software")
-                        step_field_scores.append(sc)
-                        field_details["step.software"] = detail
-                        if detail == "wrong_type":
-                            violations.append("step software: wrong_type (flat strings)")
-                else:
-                    # Regular field — check direct or alias
-                    if skey in step:
-                        step_field_scores.append(1.0)
-                    else:
-                        # Check if an alias is present
-                        alias_found = None
-                        if skey in STEP_KEY_ALIASES:
-                            for alias in STEP_KEY_ALIASES[skey]:
-                                if alias in step:
-                                    alias_found = alias
-                                    break
-                        if alias_found:
-                            step_field_scores.append(0.3)
-                            field_details[f"step.{skey}"] = "alias_match"
-                            violations.append(f"alias: '{alias_found}' used instead of '{skey}' in step")
-                        else:
-                            step_field_scores.append(0.0)
-                            field_details[f"step.{skey}"] = "missing"
-            if step_field_scores:
-                step_scores.append(sum(step_field_scores) / len(step_field_scores))
-    else:
-        step_scores = [0.0]
-
-    # --- Weighted aggregation ---
-    # top-level: 40%, metadata: 30%, steps: 30%
-    top_avg = sum(top_scores) / len(top_scores) if top_scores else 0.0
-    meta_avg = sum(meta_scores) / len(meta_scores) if meta_scores else 0.0
-    step_avg = sum(step_scores) / len(step_scores) if step_scores else 0.0
-
-    final_score = 0.4 * top_avg + 0.3 * meta_avg + 0.3 * step_avg
-
-    return ScoredResult(
-        score=round(final_score, 4),
-        max_score=1.0,
-        violations=violations,
-        field_details=field_details,
-        schema_group=schema_group,
-    )
+    try:
+        CaseCard.model_validate(case_data)
+        return ScoredResult(
+            score=1.0, max_score=1.0,
+            violations=[], detailed_violations=[],
+            field_details={}, schema_group=schema_group,
+        )
+    except ValidationError as e:
+        detailed = pydantic_errors_to_violations(
+            e.errors(), source_file=source_file, record_id=record_id,
+        )
+        violations = [f"{d.path}: {d.error}" for d in detailed]
+        total = _count_required_fields(CaseCard) + 10  # metadata + step fields
+        score = _score_from_errors(len(e.errors()), total)
+        return ScoredResult(
+            score=score, max_score=1.0,
+            violations=violations,
+            detailed_violations=[d.to_dict() for d in detailed],
+            field_details={}, schema_group=schema_group,
+        )
 
 
 # ---------------------------------------------------------------------------
 # score_paper_list
 # ---------------------------------------------------------------------------
 
-def score_paper_list(paper_data) -> ScoredResult:
-    """Score a paper list for canonical conformance."""
-    violations = []
-    field_details = {}
-
-    # Must be a dict with "papers" key
+def score_paper_list(paper_data, source_file: str = "") -> ScoredResult:
+    """Score paper_list.json against canonical PaperList model."""
     if not isinstance(paper_data, dict):
-        violations.append("missing: papers (top-level must be dict with 'papers' key)")
-        field_details["papers"] = "missing"
         return ScoredResult(
-            score=0.0,
-            max_score=1.0,
-            violations=violations,
-            field_details=field_details,
-            schema_group="unknown",
+            score=0.0, max_score=1.0,
+            violations=["top-level must be a dict with 'papers' key"],
+            detailed_violations=[],
+            field_details={}, schema_group="unknown",
         )
 
-    scores = []
+    record_id = paper_data.get("workflow_id", "unknown")
 
-    # Check required top-level
-    for key in PAPER_LIST["required_top_level"]:
-        if key in paper_data:
-            field_details[key] = "present"
-            scores.append(1.0)
-        else:
-            field_details[key] = "missing"
-            scores.append(0.0)
-            violations.append(f"missing: {key}")
+    try:
+        PaperList.model_validate(paper_data)
+        return ScoredResult(
+            score=1.0, max_score=1.0,
+            violations=[], detailed_violations=[],
+            field_details={}, schema_group="canonical",
+        )
+    except ValidationError as e:
+        detailed = pydantic_errors_to_violations(
+            e.errors(), source_file=source_file, record_id=record_id,
+        )
+        # Enrich record info for per-paper errors
+        papers = paper_data.get("papers", [])
+        for d in detailed:
+            parts = d.path.split(".")
+            if len(parts) >= 2 and parts[0] == "papers" and parts[1].isdigit():
+                idx = int(parts[1])
+                if isinstance(papers, list) and idx < len(papers):
+                    paper = papers[idx]
+                    if isinstance(paper, dict):
+                        d.record = paper.get("paper_id", paper.get("id", f"papers[{idx}]"))
 
-    # Check recommended top-level (partial credit)
-    rec_scores = []
-    for key in PAPER_LIST["recommended_top_level"]:
-        if key in paper_data:
-            rec_scores.append(1.0)
-        else:
-            rec_scores.append(0.0)
-    rec_avg = sum(rec_scores) / len(rec_scores) if rec_scores else 0.0
-
-    # Check per-paper required fields
-    papers = paper_data.get("papers", [])
-    paper_scores = []
-    if isinstance(papers, list) and len(papers) > 0:
-        for paper in papers:
-            if not isinstance(paper, dict):
-                paper_scores.append(0.0)
-                continue
-            paper_field_scores = []
-            for pkey in PAPER_LIST["per_paper_required"]:
-                if pkey in paper:
-                    paper_field_scores.append(1.0)
-                else:
-                    paper_field_scores.append(0.0)
-                    violations.append(f"missing paper field: {pkey}")
-            if paper_field_scores:
-                paper_scores.append(sum(paper_field_scores) / len(paper_field_scores))
-    else:
-        paper_scores = [0.0]
-
-    top_avg = sum(scores) / len(scores) if scores else 0.0
-    paper_avg = sum(paper_scores) / len(paper_scores) if paper_scores else 0.0
-
-    # Weights: required top-level 40%, recommended 20%, per-paper 40%
-    final_score = 0.4 * top_avg + 0.2 * rec_avg + 0.4 * paper_avg
-
-    return ScoredResult(
-        score=round(final_score, 4),
-        max_score=1.0,
-        violations=violations,
-        field_details=field_details,
-        schema_group="canonical" if "papers" in paper_data else "unknown",
-    )
+        violations = [f"{d.path}: {d.error}" for d in detailed]
+        total_fields = _count_required_fields(PaperList)
+        n_papers = len(papers) if isinstance(papers, list) else 0
+        total = total_fields + n_papers * _count_required_fields(Paper)
+        score = _score_from_errors(len(e.errors()), max(total, 1))
+        return ScoredResult(
+            score=score, max_score=1.0,
+            violations=violations,
+            detailed_violations=[d.to_dict() for d in detailed],
+            field_details={}, schema_group="canonical" if "papers" in paper_data else "unknown",
+        )
 
 
 # ---------------------------------------------------------------------------
 # score_variant
 # ---------------------------------------------------------------------------
 
-def score_variant(variant_data: dict) -> ScoredResult:
-    """Score a variant file for canonical conformance."""
-    violations = []
-    field_details = {}
-    scores = []
+def score_variant(variant_data: dict, source_file: str = "") -> ScoredResult:
+    """Score a variant file against canonical Variant model."""
+    record_id = variant_data.get("variant_id", "unknown")
 
-    variant_id_pattern = VARIANT.get("variant_id_pattern", r"^V\d+$")
-
-    for key in VARIANT["required_top_level"]:
-        if key not in variant_data:
-            field_details[key] = "missing"
-            scores.append(0.0)
-            violations.append(f"missing: {key}")
-        elif key == "variant_id":
-            vid = variant_data[key]
-            if re.match(variant_id_pattern, str(vid)):
-                field_details[key] = "present"
-                scores.append(1.0)
-            else:
-                field_details[key] = "wrong_type"
-                scores.append(0.0)
-                violations.append(
-                    f"variant_id '{vid}' does not match pattern '{variant_id_pattern}'"
-                )
-        elif key == "uo_sequence":
-            val = variant_data[key]
-            if isinstance(val, list):
-                field_details[key] = "present"
-                scores.append(1.0)
-            else:
-                field_details[key] = "wrong_type"
-                scores.append(0.5)
-                violations.append(f"uo_sequence should be a list, got {type(val).__name__}")
-        else:
-            field_details[key] = "present"
-            scores.append(1.0)
-
-    final_score = sum(scores) / len(scores) if scores else 0.0
-
-    return ScoredResult(
-        score=round(final_score, 4),
-        max_score=1.0,
-        violations=violations,
-        field_details=field_details,
-        schema_group="canonical" if not violations else "non_canonical",
-    )
+    try:
+        Variant.model_validate(variant_data)
+        return ScoredResult(
+            score=1.0, max_score=1.0,
+            violations=[], detailed_violations=[],
+            field_details={}, schema_group="canonical",
+        )
+    except ValidationError as e:
+        detailed = pydantic_errors_to_violations(
+            e.errors(), source_file=source_file, record_id=record_id,
+        )
+        violations = [f"{d.path}: {d.error}" for d in detailed]
+        total = _count_required_fields(Variant) + 5
+        score = _score_from_errors(len(e.errors()), max(total, 1))
+        return ScoredResult(
+            score=score, max_score=1.0,
+            violations=violations,
+            detailed_violations=[d.to_dict() for d in detailed],
+            field_details={}, schema_group="non_canonical" if violations else "canonical",
+        )
 
 
 # ---------------------------------------------------------------------------
 # score_composition_data
 # ---------------------------------------------------------------------------
 
-def score_composition_data(comp_data: dict) -> ScoredResult:
-    """Score composition_data.json for canonical conformance."""
-    violations = []
-    field_details = {}
-    scores = []
+def score_composition_data(comp_data: dict, source_file: str = "") -> ScoredResult:
+    """Score composition_data.json against canonical CompositionData model."""
+    record_id = comp_data.get("workflow_id", "unknown")
 
-    schema_prefix = COMPOSITION_DATA["schema_version_prefix"]
-
-    for key in COMPOSITION_DATA["required_top_level"]:
-        if key not in comp_data:
-            field_details[key] = "missing"
-            scores.append(0.0)
-            violations.append(f"missing: {key}")
-        elif key == "schema_version":
-            sv = str(comp_data[key])
-            if sv.startswith(schema_prefix):
-                field_details[key] = "present"
-                scores.append(1.0)
-            else:
-                field_details[key] = "wrong_type"
-                scores.append(0.0)
-                violations.append(
-                    f"schema_version '{sv}' does not start with '{schema_prefix}'"
-                )
-        else:
-            field_details[key] = "present"
-            scores.append(1.0)
-
-    # Check statistics field
-    statistics = comp_data.get("statistics", {})
-    if isinstance(statistics, dict) and statistics:
-        deprecated_map = COMPOSITION_DATA["statistics_deprecated_map"]
-        standard = COMPOSITION_DATA["statistics_standard"]
-        has_deprecated = False
-        for dep_key in deprecated_map:
-            if dep_key in statistics:
-                has_deprecated = True
-                canonical = deprecated_map[dep_key]
-                violations.append(
-                    f"deprecated statistics key '{dep_key}', use '{canonical}'"
-                )
-        # Check how many standard keys are present
-        std_present = sum(1 for k in standard if k in statistics)
-        std_score = std_present / len(standard) if standard else 0.0
-        if has_deprecated:
-            # Penalty for using deprecated keys
-            stats_score = std_score * 0.5
-        else:
-            stats_score = std_score
-        field_details["statistics"] = "present" if not has_deprecated and std_score >= 1.0 else "wrong_type"
-        scores.append(stats_score)
-    else:
-        scores.append(0.0)
-        violations.append("missing or empty: statistics")
-        field_details["statistics"] = "missing"
-
-    final_score = sum(scores) / len(scores) if scores else 0.0
-
-    return ScoredResult(
-        score=round(final_score, 4),
-        max_score=1.0,
-        violations=violations,
-        field_details=field_details,
-        schema_group="canonical" if not violations else "non_canonical",
-    )
+    try:
+        CompositionData.model_validate(comp_data)
+        return ScoredResult(
+            score=1.0, max_score=1.0,
+            violations=[], detailed_violations=[],
+            field_details={}, schema_group="canonical",
+        )
+    except ValidationError as e:
+        detailed = pydantic_errors_to_violations(
+            e.errors(), source_file=source_file, record_id=record_id,
+        )
+        violations = [f"{d.path}: {d.error}" for d in detailed]
+        total = _count_required_fields(CompositionData) + _count_required_fields(
+            __import__("models.composition_data", fromlist=["Statistics"]).Statistics
+        )
+        score = _score_from_errors(len(e.errors()), max(total, 1))
+        return ScoredResult(
+            score=score, max_score=1.0,
+            violations=violations,
+            detailed_violations=[d.to_dict() for d in detailed],
+            field_details={}, schema_group="non_canonical" if violations else "canonical",
+        )
 
 
 # ---------------------------------------------------------------------------
-# score_report_sections
+# New: score functions for the 9 additional file types
+# ---------------------------------------------------------------------------
+
+def _score_generic(model_cls, data: dict, source_file: str = "", record_key: str = "workflow_id") -> ScoredResult:
+    """Generic Pydantic validation scorer for any model."""
+    record_id = data.get(record_key, "unknown") if isinstance(data, dict) else "unknown"
+    if not isinstance(data, dict):
+        return ScoredResult(
+            score=0.0, max_score=1.0,
+            violations=[f"expected dict, got {type(data).__name__}"],
+            detailed_violations=[], field_details={}, schema_group="unknown",
+        )
+    try:
+        model_cls.model_validate(data)
+        return ScoredResult(
+            score=1.0, max_score=1.0,
+            violations=[], detailed_violations=[],
+            field_details={}, schema_group="canonical",
+        )
+    except ValidationError as e:
+        detailed = pydantic_errors_to_violations(
+            e.errors(), source_file=source_file, record_id=record_id,
+        )
+        violations = [f"{d.path}: {d.error}" for d in detailed]
+        total = _count_required_fields(model_cls) + 3
+        score = _score_from_errors(len(e.errors()), max(total, 1))
+        return ScoredResult(
+            score=score, max_score=1.0,
+            violations=violations,
+            detailed_violations=[d.to_dict() for d in detailed],
+            field_details={}, schema_group="non_canonical" if violations else "canonical",
+        )
+
+
+def score_case_summary(data: dict, source_file: str = "") -> ScoredResult:
+    return _score_generic(CaseSummary, data, source_file)
+
+def score_cluster_result(data: dict, source_file: str = "") -> ScoredResult:
+    return _score_generic(ClusterResult, data, source_file)
+
+def score_common_pattern(data: dict, source_file: str = "") -> ScoredResult:
+    return _score_generic(CommonPattern, data, source_file)
+
+def score_parameter_ranges(data: dict, source_file: str = "") -> ScoredResult:
+    return _score_generic(ParameterRanges, data, source_file)
+
+def score_step_alignment(data: dict, source_file: str = "") -> ScoredResult:
+    return _score_generic(StepAlignment, data, source_file)
+
+def score_uo_mapping(data: dict, source_file: str = "") -> ScoredResult:
+    return _score_generic(UoMapping, data, source_file)
+
+def score_qc_checkpoints(data: dict, source_file: str = "") -> ScoredResult:
+    return _score_generic(QcCheckpoints, data, source_file)
+
+def score_workflow_context(data: dict, source_file: str = "") -> ScoredResult:
+    return _score_generic(WorkflowContext, data, source_file)
+
+
+# ---------------------------------------------------------------------------
+# score_report_sections (unchanged — no Pydantic model for markdown)
 # ---------------------------------------------------------------------------
 
 def score_report_sections(report_text: str) -> ScoredResult:
-    """Score a report for 13 required numbered sections.
-
-    Looks for headings matching: ^#{1,3}\\s*\\d+\\.
-    """
+    """Score a report for 13 required numbered sections."""
     violations = []
     field_details = {}
 
@@ -439,9 +299,7 @@ def score_report_sections(report_text: str) -> ScoredResult:
     score = min(found / expected, 1.0)
 
     if found < expected:
-        violations.append(
-            f"found {found}/{expected} numbered sections"
-        )
+        violations.append(f"found {found}/{expected} numbered sections")
     field_details["sections_found"] = str(found)
     field_details["sections_expected"] = str(expected)
 
@@ -449,6 +307,7 @@ def score_report_sections(report_text: str) -> ScoredResult:
         score=round(score, 4),
         max_score=1.0,
         violations=violations,
+        detailed_violations=[],
         field_details=field_details,
         schema_group="report",
     )
@@ -470,14 +329,7 @@ _WEIGHTS = {
 
 
 def aggregate_workflow_score(scores: dict) -> float:
-    """Weighted average of component scores.
-
-    Args:
-        scores: dict mapping component name to float (0.0-1.0).
-
-    Returns:
-        Weighted average as float (0.0-1.0).
-    """
+    """Weighted average of component scores."""
     total = 0.0
     weight_sum = 0.0
     for component, weight in _WEIGHTS.items():

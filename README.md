@@ -3,7 +3,7 @@
 SBLab KRIBB의 Claude Code 커스텀 스킬 모음.
 바이오파운드리 워크플로 구성, 과학 문헌 분석, 스킬 자동 생성 등을 지원합니다.
 
-**Version**: 1.1.0
+**Version**: 1.2.0
 
 ---
 
@@ -27,7 +27,7 @@ workflow-composer (Orchestrator v2.4)
 | **wf-literature** | 2.0.0 | OpenAlex/PubMed 논문 검색, 품질 평가(PD+UC+ES), 7대 원칙 기반 케이스 카드 추출 |
 | **wf-analysis** | 2.0.0 | Step Alignment, 변형 클러스터링, Multi-signal UO 매핑, QC 체크포인트 설계, 7-Component 구조 |
 | **wf-output** | 2.1.0 | Schema v4.0.0 JSON, 13섹션 리포트, Mermaid 시각화, Validation Gate, 한국어 번역 |
-| **wf-audit** | 1.0.0 | 40개 워크플로 일괄 감사. DOI 검증, 스키마 준수, 참조 무결성 검사 |
+| **wf-audit** | 2.0.0 | Pydantic v2 기반 40개 워크플로 일괄 감사. 13 파일 타입 검증, 스키마 준수, 참조 무결성 검사 |
 | **wf-migrate** | 2.1.0 | 레거시 데이터 마이그레이션, PubMed 메타데이터 보강, DOI 자동 교정 |
 
 ### Science & Analysis Skills
@@ -127,7 +127,8 @@ my-claude-skills/
 │   └── references/       # visualization-guide.md, output-templates.md
 ├── wf-audit/             # Post-hoc Audit
 │   ├── SKILL.md
-│   └── scripts/          # doi_validator.py, referential_integrity.py
+│   ├── CHANGELOG.md
+│   └── scripts/          # doi_validator.py, referential_integrity.py, models/
 ├── wf-migrate/           # Legacy Migration
 │   └── SKILL.md
 ├── rna-seq-analysis/
