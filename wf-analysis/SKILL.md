@@ -4,12 +4,12 @@ trigger: /wf-analysis
 description: >
   Analyze collected case cards to derive common workflow patterns, variants,
   and map to standardized Unit Operations with typed 7-component structures.
-version: 2.0.0
+version: 2.1.0
 author: SBLab KRIBB
 tags: [biofoundry, workflow, analysis, unit-operation, variant]
 ---
 
-# WF-Analysis v2.0 — Case Analysis & UO Mapping
+# WF-Analysis v2.1 — Case Analysis & UO Mapping
 
 Analyze case cards, derive workflow patterns, map to Unit Operations, and compose typed variant structures.
 
@@ -68,6 +68,19 @@ For each UO in each variant, populate typed components from case data:
 - Every value must include `case_refs` and `evidence_tag`
 
 Save `04_workflow/variant_V1_*.json`, etc.
+
+#### Canonical Variant File Format (MANDATORY)
+
+All variant files MUST use the canonical format:
+
+| Field | Canonical Key | Legacy (do NOT use) |
+|-------|---------------|---------------------|
+| UO sequence | `unit_operations` | ~~`uo_sequence`~~ |
+| Variant name | `variant_name` | ~~`name`~~ |
+| Case references | `case_ids` | ~~`case_refs`~~, ~~`cases`~~, ~~`supporting_cases`~~ |
+| Step position | `step_position` (integer) | ~~string position~~ |
+| Components | Flat on UO object (`input`, `output`, `equipment`, ...) | ~~nested under `components` wrapper~~ |
+| Material/Method | `material_and_method` | ~~`Material_Method`~~ |
 
 ### 4.2 QC Checkpoint Design — per `references/qc-checkpoint-guide.md`
 

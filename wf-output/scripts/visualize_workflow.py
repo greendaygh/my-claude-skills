@@ -322,7 +322,7 @@ def generate_detailed_graph(variant_data: dict, workflow_id: str, variant_id: st
     )
     lines.append("")
 
-    uo_sequence = variant_data.get("uo_sequence", [])
+    uo_sequence = _extract_uo_list(variant_data)
 
     # Track UO metadata for edge building
     uo_nodes = []  # list of {uo_id, sub_id, type, out_node, in_node, output_label}
@@ -331,7 +331,8 @@ def generate_detailed_graph(variant_data: dict, workflow_id: str, variant_id: st
     uo_qc_map = {}  # (uo_id, index) → {qc_id, measurement, ...}
     qc_counter = 0
     for idx, uo in enumerate(uo_sequence):
-        qc_data = uo.get("components", {}).get("result", {}).get("qc_checkpoint", None)
+        result_comp = _get_component(uo, "result")
+        qc_data = result_comp.get("qc_checkpoint", None)
         if qc_data and isinstance(qc_data, dict) and qc_data.get("measurement"):
             qc_counter += 1
             if not qc_data.get("qc_id"):
@@ -343,14 +344,13 @@ def generate_detailed_graph(variant_data: dict, workflow_id: str, variant_id: st
         uo_id = uo.get("uo_id", f"UO{i}")
         instance_label = uo.get("instance_label", uo.get("uo_name", ""))
         uo_type = uo.get("type", "hardware")
-        components = uo.get("components", {})
         comp_keys = get_component_keys(uo_type)
         sub_id = sanitize_mermaid_id(f"{uo_id}_{i}")
 
         # Check which components have data
         has_components = False
         for ck in comp_keys:
-            comp_data = components.get(ck, {})
+            comp_data = _get_component(uo, ck)
             if comp_data.get("items"):
                 has_components = True
                 break
@@ -379,7 +379,7 @@ def generate_detailed_graph(variant_data: dict, workflow_id: str, variant_id: st
         output_label = ""
 
         for ck in comp_keys:
-            comp_data = components.get(ck, {})
+            comp_data = _get_component(uo, ck)
             label = extract_component_label(comp_data)
             if not label:
                 continue

@@ -219,8 +219,9 @@ def _section_variants(variants: list, cases: list) -> str:
             if v.get("description"):
                 lines.append(v["description"])
                 lines.append("")
-            if v.get("uo_sequence"):
-                seq = [s if isinstance(s, str) else s.get("name", s.get("uo_id", str(s))) for s in v["uo_sequence"]]
+            uo_list = v.get("unit_operations", v.get("uo_sequence", []))
+            if uo_list:
+                seq = [s if isinstance(s, str) else s.get("uo_name", s.get("name", s.get("uo_id", str(s)))) for s in uo_list]
                 lines.append(f"**UO Sequence**: {' -> '.join(seq)}")
                 lines.append("")
 
@@ -542,7 +543,7 @@ def _wf_section_variants(variants: list, cases: list) -> str:
             lines.append(f"### {v_id}: {v_name}")
             lines.append("")
 
-            uo_seq = v.get("uo_sequence", [])
+            uo_seq = v.get("unit_operations", v.get("uo_sequence", []))
             if uo_seq:
                 lines.append("| Step | UO ID | UO Name | Key Equipment |")
                 lines.append("|------|-------|---------|---------------|")

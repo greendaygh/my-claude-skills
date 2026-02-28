@@ -3,6 +3,41 @@
 ## Overview
 Each Hardware Unit Operation (UHW series) has 7 components that must be populated from case card data.
 
+## Canonical Variant File Structure
+
+Variant files MUST use this top-level structure:
+```json
+{
+  "variant_id": "V1",
+  "variant_name": "Descriptive Name",
+  "case_ids": ["C001", "C003"],
+  "description": "...",
+  "unit_operations": [
+    {
+      "uo_id": "UHW100a",
+      "uo_name": "PCR Amplification",
+      "instance_label": "Insert Amplification",
+      "type": "hardware",
+      "step_position": 1,
+      "input": { "items": [...] },
+      "output": { "items": [...] },
+      "equipment": { "items": [...] },
+      "consumables": { "items": [...] },
+      "material_and_method": { "items": [...] },
+      "result": { "items": [...] },
+      "discussion": { "items": [...] }
+    }
+  ]
+}
+```
+
+Key rules:
+- Use `unit_operations` (NOT `uo_sequence`)
+- Use `variant_name` (NOT `name`)
+- Use `case_ids` (NOT `case_refs`, `cases`, `supporting_cases`)
+- Components are flat fields on the UO object (NOT nested under a `components` wrapper)
+- `step_position` must be an integer
+
 ## Component Definitions and Extraction Rules
 
 ### 1. Input

@@ -89,13 +89,34 @@ def test_check_uo_catalog_refs_missing(tmp_path):
     assert "FAKE001" in violations[0]
 
 
+def test_check_uo_catalog_refs_canonical_format(tmp_path):
+    catalog = {"UHW400a": {"uo_id": "UHW400a", "uo_name": "Test UO"}}
+    _write_json(
+        tmp_path / "04_workflow" / "variant_V1.json",
+        {"variant_id": "V1", "unit_operations": [{"uo_id": "UHW400a", "step_position": 1}]},
+    )
+    violations = check_uo_catalog_refs(tmp_path, catalog)
+    assert violations == []
+
+
+def test_check_uo_catalog_refs_canonical_missing(tmp_path):
+    catalog = {"UHW400a": {"uo_id": "UHW400a", "uo_name": "Test UO"}}
+    _write_json(
+        tmp_path / "04_workflow" / "variant_V1.json",
+        {"variant_id": "V1", "unit_operations": [{"uo_id": "FAKE002", "step_position": 1}]},
+    )
+    violations = check_uo_catalog_refs(tmp_path, catalog)
+    assert len(violations) == 1
+    assert "FAKE002" in violations[0]
+
+
 # ---------------------------------------------------------------------------
 # check_paper_case_refs
 # ---------------------------------------------------------------------------
 
 def test_check_paper_case_refs_valid(tmp_path):
     _write_json(
-        tmp_path / "01_literature" / "paper_list.json",
+        tmp_path / "01_papers" / "paper_list.json",
         {"papers": [{"pmid": "12345", "title": "Paper A"}]},
     )
     _write_json(
@@ -108,7 +129,7 @@ def test_check_paper_case_refs_valid(tmp_path):
 
 def test_check_paper_case_refs_missing(tmp_path):
     _write_json(
-        tmp_path / "01_literature" / "paper_list.json",
+        tmp_path / "01_papers" / "paper_list.json",
         {"papers": [{"pmid": "12345", "title": "Paper A"}]},
     )
     _write_json(
@@ -177,7 +198,7 @@ def test_check_case_id_format_invalid(tmp_path):
 def test_run_all(tmp_path):
     # Build a complete minimal workflow dir
     _write_json(
-        tmp_path / "01_literature" / "paper_list.json",
+        tmp_path / "01_papers" / "paper_list.json",
         {"papers": [{"pmid": "11111"}]},
     )
     _write_json(

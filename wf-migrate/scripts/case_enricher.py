@@ -64,7 +64,7 @@ def extract_metadata_from_paper(paper_info: dict, case_data: dict) -> dict:
         ),
         "fulltext_access": existing_meta.get(
             "fulltext_access",
-            bool(paper_info.get("full_text") or paper_info.get("abstract")),
+            bool(paper_info.get("has_full_text") or paper_info.get("full_text") or paper_info.get("abstract")),
         ),
         "access_method": _best(
             existing_meta.get("access_method"),
@@ -73,7 +73,7 @@ def extract_metadata_from_paper(paper_info: dict, case_data: dict) -> dict:
         ),
         "access_tier": existing_meta.get(
             "access_tier",
-            1 if paper_info.get("full_text") else (2 if paper_info.get("abstract") else 3),
+            1 if paper_info.get("has_full_text") or paper_info.get("full_text") else (2 if paper_info.get("abstract") else 3),
         ),
     }
 
@@ -513,8 +513,20 @@ def _extract_methods_section(full_text: str) -> str:
 # Main enrichment entry point
 # ---------------------------------------------------------------------------
 
+def _load_full_text(wf_dir, paper_id: str) -> str:
+    """Load full text from the separate full_texts/ directory."""
+    if wf_dir is None:
+        return ""
+    from pathlib import Path
+    ft_path = Path(wf_dir) / "01_papers" / "full_texts" / f"{paper_id}.txt"
+    if ft_path.exists():
+        return ft_path.read_text(encoding="utf-8")
+    return ""
+
+
 def enrich_case_card(case_data: dict, paper_info: dict,
-                     composition_data: dict = None) -> dict:
+                     composition_data: dict = None,
+                     wf_dir=None) -> dict:
     """Full enrichment of a single case card using paper information.
 
     Applies all 6 principles:
@@ -529,12 +541,14 @@ def enrich_case_card(case_data: dict, paper_info: dict,
         case_data: existing case card dict
         paper_info: enriched paper dict (with abstract, etc.)
         composition_data: workflow composition_data.json (for workflow_context)
+        wf_dir: workflow directory (for loading full text from separate files)
 
     Returns:
         Enriched case card dict.
     """
     enriched = dict(case_data)
-    full_text = paper_info.get("full_text", "")
+    paper_id = paper_info.get("paper_id", paper_info.get("id", ""))
+    full_text = paper_info.get("full_text", "") or _load_full_text(wf_dir, paper_id)
     abstract = paper_info.get("abstract", "")
     paper_text = _extract_methods_section(full_text) if full_text else str(abstract)
 

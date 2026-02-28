@@ -161,7 +161,7 @@ def check_uo_catalog_refs(wf_dir: Path, catalog: dict) -> list[str]:
         data = _load_json(vfile)
         if not isinstance(data, dict):
             continue
-        for step in data.get("uo_sequence", []):
+        for step in data.get("unit_operations", data.get("uo_sequence", [])):
             uo_id = step.get("uo_id")
             if uo_id and uo_id not in catalog:
                 violations.append(
@@ -174,9 +174,13 @@ def check_paper_case_refs(wf_dir: Path) -> list[str]:
     """Check that pmids referenced in case cards exist in paper_list.json."""
     violations: list[str] = []
 
-    # Load paper list — support both {"papers": [...]} and flat [...]
-    paper_list_path = wf_dir / "01_literature" / "paper_list.json"
-    raw = _load_json(paper_list_path)
+    # Load paper list — support both directory names and data formats
+    raw = None
+    for paper_subdir in ("01_papers", "01_literature"):
+        paper_list_path = wf_dir / paper_subdir / "paper_list.json"
+        raw = _load_json(paper_list_path)
+        if raw is not None:
+            break
     if raw is None:
         return violations
 

@@ -482,7 +482,7 @@ Must include:
 - `statistics`: papers, cases, variants, UOs, QC checkpoints, confidence
 - `modularity`: boundary_inputs, boundary_outputs, upstream, downstream, service_chains
 - `common_skeleton`: aligned positions
-- `variants`: each with name, case_ids, uo_sequence (with full 7-component structure)
+- `variants`: each with variant_name, case_ids, unit_operations (with full 7-component structure)
 - `parameter_ranges`
 - `equipment_software_inventory`: equipment (name/model/manufacturer) + software (name/version/developer) + coverage stats
 - `limitations`

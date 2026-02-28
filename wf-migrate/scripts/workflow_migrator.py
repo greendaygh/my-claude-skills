@@ -363,14 +363,16 @@ def enrich_workflow(wf_dir: Path, dry_run: bool = False,
     if not dry_run:
         _backup_for_enrichment(wf_dir)
 
-    # Save enriched paper_list and full texts (or abstracts as fallback)
+    # Save full texts to separate files and strip from paper objects
     if not dry_run:
-        save_enriched_paper_list(wf_dir, enriched_papers)
         for p in papers:
-            text = p.get("full_text", "") or p.get("abstract", "")
+            pending_text = p.pop("_full_text_pending", "")
+            text = pending_text or p.get("abstract", "")
             pid = p.get("paper_id", p.get("id", ""))
             if text and pid:
                 save_paper_fulltext(wf_dir, pid, text)
+            p.pop("full_text", None)
+        save_enriched_paper_list(wf_dir, enriched_papers)
 
     # B.2 — Case card enrichment
     cases_dir = wf_dir / "02_cases"
@@ -407,7 +409,7 @@ def enrich_workflow(wf_dir: Path, dry_run: bool = False,
         paper_info = paper_index.get(paper_id, {})
 
         # Enrich the case card
-        enriched = enrich_case_card(case_data, paper_info, comp_data)
+        enriched = enrich_case_card(case_data, paper_info, comp_data, wf_dir=wf_dir)
         enriched_cases += 1
 
         changes = []

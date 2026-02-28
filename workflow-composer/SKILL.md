@@ -5,12 +5,12 @@ description: >
   Orchestrate biofoundry workflow composition through sub-skill delegation.
   Phase 1 (Resolve) runs locally; Phases 2-5 are delegated to wf-literature,
   wf-analysis, and wf-output skills for context isolation and independent re-runs.
-version: 2.4.0
+version: 2.5.0
 author: SBLab KRIBB
 tags: [biofoundry, workflow, orchestrator, unit-operation, literature-mining]
 ---
 
-# Workflow Composer v2.4 — Orchestrator
+# Workflow Composer v2.5 — Orchestrator
 
 Compose biofoundry workflows (~37 standard workflows, ~80 unit operations) through **case-first literature mining**. Supports two delegation modes: sub-skill chaining (default) and deep-executor (for batch processing).
 
@@ -206,13 +206,50 @@ Task(
 For multiple workflows (e.g., `WB* --fresh --deep`):
 
 ```
-for each WF_ID in workflow_list:
-  1. Run Phase 1 locally (backup, clean, create workflow_context.json)
-  2. Spawn deep-executor for Phases 2-5 (with guide reference)
-  3. Verify gate checks on completion
-  4. Update checkpoint.md
-  5. Proceed to next workflow
+from scripts.batch_tracker import BatchTracker
+
+tracker = BatchTracker(output_dir, workflow_ids)
+
+for WF_ID in tracker.get_pending():   # or get_resumable() with --resume
+  tracker.start(WF_ID)
+  try:
+    1. Run Phase 1 locally (backup, clean, create workflow_context.json)
+    2. Spawn deep-executor for Phases 2-5 (with guide reference)
+    3. Verify gate checks on completion (validate_phase2_gate, validate_phase34_gate, validate_phase5_gate)
+    4. Verify canonical format (validate_variant_canonical_format)
+    tracker.complete(WF_ID)
+  except Exception as e:
+    tracker.fail(WF_ID, str(e))
+    continue  # skip to next workflow
+
+tracker.finish()
 ```
+
+**State Tracking**: `batch_state.json` records completed/failed/pending workflows.
+
+**Resume Mode**: Use `--resume` flag. `tracker.get_resumable()` returns failed + pending workflows, skipping already completed ones.
+
+**Error Recovery**:
+- Individual failure: re-run the specific workflow with `/workflow-composer {WF_ID}`
+- Batch resume: re-run batch with `--resume` flag to continue from where it stopped
+- Full restart: delete `batch_state.json` and run batch again
+
+---
+
+## Canonical Variant File Format
+
+All `variant_V*.json` files MUST use the canonical format. This applies to both sub-skill and deep-executor modes.
+
+| Field | Canonical Key | Legacy (do NOT use) |
+|-------|---------------|---------------------|
+| UO sequence | `unit_operations` | ~~`uo_sequence`~~ |
+| Variant name | `variant_name` | ~~`name`~~ |
+| Case references | `case_ids` | ~~`case_refs`~~, ~~`cases`~~, ~~`supporting_cases`~~ |
+| Step position | `step_position` (integer) | ~~string position~~ |
+| Components | Flat on UO object (`input`, `output`, `equipment`, ...) | ~~nested under `components` wrapper~~ |
+| Material/Method | `material_and_method` | ~~`Material_Method`~~ |
+
+The canonical schema is defined by Pydantic models in `wf-audit/scripts/models/variant.py`. Use `validate_variant_canonical_format()` from `scripts/validate_workflow.py` to verify.
 
 ---
 

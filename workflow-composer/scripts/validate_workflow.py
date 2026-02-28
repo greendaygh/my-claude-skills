@@ -387,6 +387,139 @@ def validate_composition_data_schema(wf_dir: str | Path) -> list[str]:
     return violations
 
 
+# ---------------------------------------------------------------------------
+# Enhanced gate checks
+# ---------------------------------------------------------------------------
+
+def validate_phase2_gate(wf_dir: str | Path) -> list[str]:
+    """Enhanced Phase 2 gate: case_summary.json has >= 3 valid cases."""
+    violations = []
+    wf_dir = Path(wf_dir)
+    cs_path = wf_dir / "02_cases" / "case_summary.json"
+
+    if not cs_path.exists():
+        violations.append("CRITICAL: 02_cases/case_summary.json not found")
+        return violations
+
+    try:
+        with open(cs_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, OSError) as e:
+        violations.append(f"CRITICAL: Cannot parse case_summary.json: {e}")
+        return violations
+
+    cases = data.get("cases", [])
+    if len(cases) < 3:
+        violations.append(f"CRITICAL: Only {len(cases)} cases found, minimum 3 required")
+
+    for i, c in enumerate(cases):
+        if not isinstance(c, dict):
+            violations.append(f"WARNING: cases[{i}] is not a dict")
+            continue
+        if not c.get("case_id"):
+            violations.append(f"WARNING: cases[{i}] missing case_id")
+
+    return violations
+
+
+def validate_phase34_gate(wf_dir: str | Path) -> list[str]:
+    """Enhanced Phase 3+4 gate: variant files have non-empty unit_operations."""
+    violations = []
+    wf_dir = Path(wf_dir)
+    wf_dir_04 = wf_dir / "04_workflow"
+
+    uo_mapping_path = wf_dir_04 / "uo_mapping.json"
+    if not uo_mapping_path.exists():
+        violations.append("CRITICAL: 04_workflow/uo_mapping.json not found")
+
+    variant_files = sorted(wf_dir_04.glob("variant_V*.json")) if wf_dir_04.exists() else []
+    if not variant_files:
+        violations.append("CRITICAL: No variant_V*.json files found in 04_workflow/")
+        return violations
+
+    for vf in variant_files:
+        try:
+            with open(vf, "r", encoding="utf-8") as f:
+                vdata = json.load(f)
+        except (json.JSONDecodeError, OSError) as e:
+            violations.append(f"CRITICAL: Cannot parse {vf.name}: {e}")
+            continue
+
+        uo_list = vdata.get("unit_operations", vdata.get("uo_sequence", []))
+        if not uo_list:
+            violations.append(f"WARNING: {vf.name} has empty unit_operations")
+
+    return violations
+
+
+def validate_phase5_gate(wf_dir: str | Path) -> list[str]:
+    """Enhanced Phase 5 gate: composition_data.json has valid statistics."""
+    violations = []
+    wf_dir = Path(wf_dir)
+    cd_path = wf_dir / "composition_data.json"
+
+    if not cd_path.exists():
+        violations.append("CRITICAL: composition_data.json not found")
+        return violations
+
+    try:
+        with open(cd_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, OSError) as e:
+        violations.append(f"CRITICAL: Cannot parse composition_data.json: {e}")
+        return violations
+
+    stats = data.get("statistics", {})
+    for field in ("papers_analyzed", "cases_collected", "variants_identified", "total_uos"):
+        val = stats.get(field, 0)
+        if not isinstance(val, (int, float)) or val <= 0:
+            violations.append(f"WARNING: statistics.{field} = {val}, expected > 0")
+
+    report_path = wf_dir / "composition_report.md"
+    if not report_path.exists():
+        violations.append("CRITICAL: composition_report.md not found")
+
+    return violations
+
+
+def validate_variant_canonical_format(wf_dir: str | Path) -> list[str]:
+    """Verify variant files use canonical unit_operations key."""
+    violations = []
+    wf_dir = Path(wf_dir)
+    wf_dir_04 = wf_dir / "04_workflow"
+
+    if not wf_dir_04.exists():
+        return violations
+
+    for vf in sorted(wf_dir_04.glob("variant_V*.json")):
+        try:
+            with open(vf, "r", encoding="utf-8") as f:
+                vdata = json.load(f)
+        except (json.JSONDecodeError, OSError):
+            continue
+
+        if "uo_sequence" in vdata and "unit_operations" not in vdata:
+            violations.append(
+                f"WARNING: {vf.name} uses legacy 'uo_sequence' key, should be 'unit_operations'"
+            )
+        if "name" in vdata and "variant_name" not in vdata:
+            violations.append(
+                f"WARNING: {vf.name} uses legacy 'name' key, should be 'variant_name'"
+            )
+
+        uo_list = vdata.get("unit_operations", [])
+        for i, uo in enumerate(uo_list):
+            if not isinstance(uo, dict):
+                continue
+            if "components" in uo:
+                violations.append(
+                    f"WARNING: {vf.name} unit_operations[{i}] uses legacy 'components' wrapper"
+                )
+                break
+
+    return violations
+
+
 def run_full_validation(wf_dir: str | Path, session_num: int = None) -> dict:
     """Run full validation suite.
 
@@ -421,6 +554,22 @@ def run_full_validation(wf_dir: str | Path, session_num: int = None) -> dict:
     schema_violations = validate_composition_data_schema(wf_dir)
     if schema_violations:
         all_violations["composition_data_schema"] = schema_violations
+
+    # Canonical format check
+    canonical_violations = validate_variant_canonical_format(wf_dir)
+    if canonical_violations:
+        all_violations["variant_canonical_format"] = canonical_violations
+
+    # Enhanced gate checks
+    gate2 = validate_phase2_gate(wf_dir)
+    if gate2:
+        all_violations["phase2_gate"] = gate2
+    gate34 = validate_phase34_gate(wf_dir)
+    if gate34:
+        all_violations["phase34_gate"] = gate34
+    gate5 = validate_phase5_gate(wf_dir)
+    if gate5:
+        all_violations["phase5_gate"] = gate5
 
     # Load execution log for rule checks
     exec_log = load_execution_log(wf_dir)

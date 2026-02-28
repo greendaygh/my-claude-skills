@@ -6,7 +6,7 @@ description: >
   cross-workflow consistency, referential integrity, and drift detection.
   Uses Pydantic v2 canonical models for precise validation with
   detailed per-file, per-record, per-field violation reporting.
-version: 2.2.0
+version: 2.3.0
 author: SBLab KRIBB
 tags: [biofoundry, workflow, audit, quality, schema-conformance, pydantic]
 ---

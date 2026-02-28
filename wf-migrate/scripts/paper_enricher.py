@@ -493,7 +493,8 @@ def enrich_paper_list(paper_data: dict | list, rate_delay: float = _REQUEST_DELA
                     text_source = "europepmc"
 
             if full_text:
-                paper["full_text"] = full_text
+                paper["has_full_text"] = True
+                paper["_full_text_pending"] = full_text
             paper["text_source"] = text_source
         else:
             paper["text_source"] = "abstract_only"

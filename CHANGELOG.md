@@ -1,5 +1,50 @@
 # Changelog
 
+## [1.8.0] — 2026-03-01
+
+### workflow-composer (2.5.0)
+
+#### Added
+- **Batch tracker** (`batch_tracker.py`) — state-file based resume capability for batch runs with `batch_state.json`
+- **Enhanced gate checks** — `validate_phase2_gate()`, `validate_phase34_gate()`, `validate_phase5_gate()` in `validate_workflow.py`
+- **Canonical variant format validation** — `validate_variant_canonical_format()` enforces `unit_operations`, `variant_name`, flat components
+- **Canonical format table** in SKILL.md documenting required vs legacy field names
+
+#### Changed
+- Batch processing flow updated to use `BatchTracker` with error recovery and `--resume` support
+- `deep-executor-guide.md` updated to canonical field names (`variant_name`, `unit_operations`)
+
+### wf-analysis (2.1.0)
+
+#### Added
+- **Canonical variant format table** in SKILL.md — mandatory field mapping (canonical vs legacy)
+- **Canonical structure examples** in hw-component-guide.md and sw-component-guide.md
+
+### wf-audit (2.3.0)
+
+#### Changed
+- `check_uo_catalog_refs()` now reads `unit_operations` with `uo_sequence` fallback
+- `check_paper_case_refs()` searches both `01_papers/` and `01_literature/` directories
+- Tests updated: canonical format test cases added, paper paths changed to `01_papers/`
+
+### wf-output (2.3.0)
+
+#### Changed
+- `visualize_workflow.py` uses `_extract_uo_list()` and `_get_component()` helpers for canonical/legacy compatibility
+
+### wf-migrate (2.5.0)
+
+#### Added
+- **Separate full-text storage** — full texts saved to `full_texts/{paper_id}.txt` instead of inline in paper objects
+- `_load_full_text()` in `case_enricher.py` loads text from separate files
+- `has_full_text` boolean flag replaces inline `full_text` field in paper_list.json
+
+#### Changed
+- `case_enricher.py` checks `has_full_text` field for access tier determination
+- `report_generator.py` reads `unit_operations` with `uo_sequence` fallback, uses `uo_name`
+- `workflow_migrator.py` strips `_full_text_pending` and `full_text` from paper objects before saving
+- `enrich_case_card()` accepts `wf_dir` parameter for full-text file loading
+
 ## [1.7.0] — 2026-03-01
 
 ### Housekeeping
