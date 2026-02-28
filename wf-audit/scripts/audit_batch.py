@@ -23,50 +23,107 @@ def discover_workflows(base_dir: Path) -> list:
     base_dir = Path(base_dir)
     found = []
     for comp_json in sorted(base_dir.glob("W*/composition_data.json")):
-        # Exclude paths inside _versions directories
         if "_versions" in comp_json.parts:
             continue
         found.append(comp_json.parent)
     return found
 
 
-def audit_all_workflows(base_dir: Path, targets: list = None, catalog: dict = None) -> dict:
-    """Audit all (or targeted) workflow dirs under base_dir.
+def _filter_dirs(wf_dirs: list, targets: list | None) -> list:
+    if not targets:
+        return wf_dirs
+    return [d for d in wf_dirs if any(d.name.startswith(t) for t in targets)]
 
-    Args:
-        base_dir: Root directory containing W* workflow folders.
-        targets: Optional list of workflow ID prefixes to filter (e.g. ["WB005"]).
-        catalog: Optional catalog dict passed to audit_single_workflow.
 
-    Returns:
-        Dict keyed by workflow_id -> audit result dict.
-    """
+def audit_all_workflows(base_dir: Path, targets: list = None,
+                        catalog: dict = None, verbose: bool = False) -> dict:
+    """Audit all (or targeted) workflow dirs under base_dir."""
     base_dir = Path(base_dir)
-    wf_dirs = discover_workflows(base_dir)
+    wf_dirs = _filter_dirs(discover_workflows(base_dir), targets)
+    total = len(wf_dirs)
 
-    if targets:
-        wf_dirs = [
-            d for d in wf_dirs
-            if any(d.name.startswith(t) for t in targets)
-        ]
+    if verbose and total > 0:
+        sys.stderr.write(f"\n=== Auditing {total} workflows ===\n")
+        sys.stderr.flush()
 
     results = {}
-    for wf_dir in wf_dirs:
-        result = audit_single_workflow(wf_dir, catalog)
+    for idx, wf_dir in enumerate(wf_dirs):
+        if verbose:
+            sys.stderr.write(f"\n[{idx + 1}/{total}] {wf_dir.name} ...\n")
+            sys.stderr.flush()
+
+        result = audit_single_workflow(wf_dir, catalog, verbose=verbose)
         wf_id = result.get("workflow_id", wf_dir.name)
         results[wf_id] = result
+
+        if verbose:
+            score = result["conformance_score"]
+            priority = result["migration_priority"]
+            sys.stderr.write(
+                f"[{idx + 1}/{total}] {wf_id}: "
+                f"score={score:.3f} priority={priority}\n"
+            )
+            sys.stderr.flush()
 
     return results
 
 
-def detect_cross_workflow_drift(results: dict, base_dir: Path = None) -> list:
-    """Detect cross-workflow inconsistencies from audit results.
+def audit_workflows_chunked(base_dir: Path, targets: list = None,
+                            catalog: dict = None, chunk_size: int = 5,
+                            verbose: bool = False):
+    """Yield (chunk_index, chunk_results, total) as each chunk completes.
 
-    Looks at composition_data violation messages for deprecated statistics
-    key usage. Returns list of drift entries.
+    Designed for agent-driven execution where intermediate results
+    are reported to the user between chunks.
     """
+    base_dir = Path(base_dir)
+    wf_dirs = _filter_dirs(discover_workflows(base_dir), targets)
+    total = len(wf_dirs)
+
+    if verbose:
+        sys.stderr.write(f"\n=== Auditing {total} workflows in chunks of {chunk_size} ===\n")
+        sys.stderr.flush()
+
+    for i in range(0, total, chunk_size):
+        chunk = wf_dirs[i: i + chunk_size]
+        chunk_results = {}
+        for wf_dir in chunk:
+            global_idx = i + len(chunk_results) + 1
+            if verbose:
+                sys.stderr.write(f"\n[{global_idx}/{total}] {wf_dir.name} ...\n")
+                sys.stderr.flush()
+
+            result = audit_single_workflow(wf_dir, catalog, verbose=verbose)
+            wf_id = result.get("workflow_id", wf_dir.name)
+            chunk_results[wf_id] = result
+
+            if verbose:
+                score = result["conformance_score"]
+                priority = result["migration_priority"]
+                sys.stderr.write(
+                    f"[{global_idx}/{total}] {wf_id}: "
+                    f"score={score:.3f} priority={priority}\n"
+                )
+                sys.stderr.flush()
+
+        chunk_idx = i // chunk_size
+        done_count = min(i + chunk_size, total)
+        if verbose:
+            scores = [r["conformance_score"] for r in chunk_results.values()]
+            avg = sum(scores) / len(scores) if scores else 0.0
+            sys.stderr.write(
+                f"\n--- chunk {chunk_idx + 1} done "
+                f"({done_count}/{total}) avg={avg:.3f} ---\n"
+            )
+            sys.stderr.flush()
+
+        yield chunk_idx, chunk_results, total
+
+
+def detect_cross_workflow_drift(results: dict, base_dir: Path = None) -> list:
+    """Detect cross-workflow inconsistencies from audit results."""
     dep_map = COMPOSITION_DATA.get("statistics_deprecated_map", {})
-    stats_deprecated_usage = defaultdict(list)  # deprecated_name -> [workflow_ids]
+    stats_deprecated_usage = defaultdict(list)
 
     for wf_id, result in results.items():
         comp_violations = (
@@ -114,13 +171,11 @@ def generate_batch_summary(results: dict, drifts: list) -> dict:
     scores = [r["conformance_score"] for r in results.values()]
     mean_conf = round(sum(scores) / len(scores), 4)
 
-    # Schema era distribution: era -> [workflow_ids]
     era_dist = defaultdict(list)
     for wf_id, result in results.items():
         era = result.get("schema_era", "unknown")
         era_dist[era].append(wf_id)
 
-    # Conformance histogram
     histogram = {"0.9-1.0": 0, "0.7-0.9": 0, "0.5-0.7": 0, "0.3-0.5": 0, "0.0-0.3": 0}
     for s in scores:
         if s >= 0.9:
@@ -134,7 +189,6 @@ def generate_batch_summary(results: dict, drifts: list) -> dict:
         else:
             histogram["0.0-0.3"] += 1
 
-    # Migration candidates: workflows where priority != "none", sorted by score asc
     migration_candidates = []
     for wf_id, result in results.items():
         score = result["conformance_score"]
@@ -147,11 +201,10 @@ def generate_batch_summary(results: dict, drifts: list) -> dict:
             })
     migration_candidates.sort(key=lambda x: x["score"])
 
-    # Fake paper suspects
     fake_paper_suspects = []
     for wf_id, result in results.items():
         pv = result.get("paper_validity", {})
-        if pv.get("suspect_count", 0) > 0:  # any fake DOI → flag
+        if pv.get("suspect_count", 0) > 0:
             fake_paper_suspects.append({
                 "workflow_id": wf_id,
                 "suspect_count": pv.get("suspect_count", 0),
@@ -160,7 +213,6 @@ def generate_batch_summary(results: dict, drifts: list) -> dict:
             })
     fake_paper_suspects.sort(key=lambda x: x["fake_ratio"], reverse=True)
 
-    # Top common violations across all workflows
     violation_counter: Counter = Counter()
     for result in results.values():
         for section_data in result.get("scores", {}).values():
@@ -194,14 +246,20 @@ def main(args=None):
         action="store_true",
         help="Skip saving individual audit reports",
     )
+    parser.add_argument(
+        "--verbose", "-v",
+        action="store_true",
+        help="Print progress to stderr",
+    )
     parsed = parser.parse_args(args)
 
-    results = audit_all_workflows(parsed.base_dir, targets=parsed.targets)
+    results = audit_all_workflows(
+        parsed.base_dir, targets=parsed.targets, verbose=parsed.verbose,
+    )
     drifts = detect_cross_workflow_drift(results)
     summary = generate_batch_summary(results, drifts)
 
     if not parsed.summary_only:
-        # Save individual audit reports
         for wf_id, result in results.items():
             for wf_dir in discover_workflows(parsed.base_dir):
                 if wf_dir.name.startswith(wf_id):
@@ -211,7 +269,6 @@ def main(args=None):
                         json.dump(result, f, indent=2)
                     break
 
-    # Save batch summary
     summary_path = parsed.base_dir / "audit_summary.json"
     with open(summary_path, "w") as f:
         json.dump(summary, f, indent=2)

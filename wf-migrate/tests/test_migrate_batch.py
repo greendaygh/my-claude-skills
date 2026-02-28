@@ -142,7 +142,7 @@ def test_generate_batch_migration_report():
     assert batch["total_workflows"] == 2
     assert batch["total_cases_enriched"] == 5
     assert batch["total_cases_skipped"] == 1
-    assert batch["migration_version"] == "2.0.0"
+    assert batch["migration_version"] == "2.2.0"
     assert "migrated_at" in batch
     assert len(batch["per_workflow"]) == 2
 

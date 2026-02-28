@@ -3,26 +3,31 @@ skill: wf-migrate
 trigger: /wf-migrate
 description: >
   Migrate and enrich legacy workflow compositions to canonical format.
-  Phase A performs mechanical field renaming; Phase B enriches case cards
-  with PubMed paper metadata and regenerates reports. Both phases run
-  automatically on every invocation.
-version: 2.1.0
+  Phase A performs mechanical field renaming; Phase A.5 applies audit-driven
+  targeted fixes; Phase B enriches case cards with PubMed paper metadata
+  and regenerates reports. All phases run automatically on every invocation.
+  Fix results are recorded in audit_report.json to avoid redundant re-processing.
+version: 2.2.0
 author: SBLab KRIBB
-tags: [biofoundry, workflow, migration, schema-upgrade, enrichment]
+tags: [biofoundry, workflow, migration, schema-upgrade, enrichment, audit-fix]
 ---
 
 # wf-migrate — Workflow Composition Migrator & Enricher
 
 Migrate legacy workflow compositions to canonical (v2) format using wf-audit
-results as input. Always runs both phases automatically:
+results as input. Runs three phases automatically:
 - **Phase A**: Transforms case cards, renames step fields, builds metadata blocks,
-  normalizes equipment/software, and updates statistics field names.
+  normalizes equipment/software, migrates composition_data and variant files.
+- **Phase A.5**: Reads `audit_report.json` detailed violations and applies targeted
+  fixes based on error_type (wrong_type, missing, pattern_mismatch). Records
+  fix_status back into audit_report.json to prevent redundant re-processing.
 - **Phase B**: Enriches case cards with PubMed paper metadata, computes real
   completeness scores, and regenerates 13-section reports.
 
 ## Prerequisites
 
-Run `/wf-audit` first to generate `audit_summary.json` with migration candidates.
+Run `/wf-audit` first to generate `audit_summary.json` with migration candidates
+and per-workflow `audit_report.json` with detailed violations.
 
 ## Invocation
 
@@ -51,7 +56,7 @@ Run `/wf-audit` first to generate `audit_summary.json` with migration candidates
 
 ### Step 3 — Migrate Case Cards
 For each `02_cases/case_C*.json`:
-1. Skip if already canonical (has metadata+completeness+flow_diagram+workflow_context)
+1. Skip if already canonical (has metadata+completeness.score+flow_diagram+workflow_context.workflow_id)
 2. Fix case_id prefix if bare (e.g., `C001` → `WB140-C001`)
 3. Build metadata block from paper_list.json lookup
 4. Rename step fields (position→step_number, name→step_name, etc.)
@@ -59,11 +64,65 @@ For each `02_cases/case_C*.json`:
 6. Add completeness stub, flow_diagram, workflow_context
 7. Preserve extra fields (variant_hint, evidence_tag, etc.)
 
-### Step 4 — Update Statistics
-Rename deprecated fields in `composition_data.json`.
+### Step 4 — Migrate composition_data.json
+- Convert `modularity.boundary_inputs/outputs` from object arrays to string arrays
+- Rename deprecated statistics fields + fill missing canonical fields with defaults
 
-### Step 5 — Report
+### Step 5 — Migrate Variant Files
+For each `04_workflow/variant_V*.json`:
+- Flatten `components` dict to UO top-level keys
+- Key mapping: `Input`→`input`, `Material_Method`→`material_and_method`, etc.
+- Rename `details`→`items`, `item`→`name`
+- Convert `step_position` from string to integer
+- Rename `uo_sequence`→`unit_operations`, `case_refs`→`case_ids`, `name`→`variant_name`
+
+### Step 6 — Report
 Write migration reports to `00_metadata/`.
+
+## Phase A.5 — Audit-Driven Targeted Fixes
+
+After Phase A mechanical migration, reads `audit_report.json` and applies
+targeted fixes based on each violation's `error_type`:
+
+- `wrong_type` + boundary_inputs/outputs → extract `.name` from objects
+- `wrong_type` + step_position → cast string to integer
+- `wrong_type` + checkpoint_summary → cast string to integer
+- `missing` + completeness.score → add default 0.0
+- `missing` + workflow_context.workflow_id → extract from composition_data
+- `missing` + statistics fields → compute defaults from file counts
+
+Each fix is recorded in `audit_report.json`:
+```json
+{
+  "fix_status": "resolved",
+  "fix_action": "object-to-string: name field extracted",
+  "fix_timestamp": "2026-02-28T12:00:00Z"
+}
+```
+
+`fix_status` values:
+- `"resolved"` — auto-fixed successfully
+- `"unresolved"` — requires manual review
+- `"skipped"` — dry-run mode (not written)
+- absent — migration not yet applied
+
+A `migration_applied` summary is added to the top level:
+```json
+{
+  "migration_applied": {
+    "migrated_at": "...",
+    "migration_version": "2.2.0",
+    "total_violations_at_audit": 150,
+    "resolved": 120,
+    "unresolved": 25,
+    "skipped": 5,
+    "pre_migration_score": 0.643,
+    "post_migration_score": 0.89
+  }
+}
+```
+
+On subsequent runs, violations with `fix_status: "resolved"` are skipped.
 
 ## Phase B — Enrichment
 
@@ -116,6 +175,7 @@ For each case card:
 
 ## Transforms Reference
 
+### Case Card Transforms
 | Legacy Field | Canonical Field | Transform |
 |---|---|---|
 | `position` | `step_number` | Rename |
@@ -130,6 +190,33 @@ For each case card:
 | `scale` | `metadata.scale` | Move to metadata |
 | `workflow_steps` | `steps` | Rename (wt_findings) |
 
+### Composition Data Transforms
+| Legacy Field | Canonical Field | Transform |
+|---|---|---|
+| `modularity.boundary_inputs` (objects) | `modularity.boundary_inputs` (strings) | Extract `.name` |
+| `modularity.boundary_outputs` (objects) | `modularity.boundary_outputs` (strings) | Extract `.name` |
+| `total_papers` | `papers_analyzed` | Rename |
+| `total_cases` | `cases_collected` | Rename |
+| `total_variants` | `variants_identified` | Rename |
+| `total_uo_types` | `total_uos` | Rename |
+
+### Variant File Transforms
+| Legacy Field | Canonical Field | Transform |
+|---|---|---|
+| `components.Input` | `input` | Flatten + lowercase |
+| `components.Output` | `output` | Flatten + lowercase |
+| `components.Equipment` | `equipment` | Flatten + lowercase |
+| `components.Consumables` | `consumables` | Flatten + lowercase |
+| `components.Material_Method` | `material_and_method` | Flatten + rename |
+| `components.Result` | `result` | Flatten + lowercase |
+| `components.Discussion` | `discussion` | Flatten + lowercase |
+| `details` (in component) | `items` | Rename |
+| `item` (in detail) | `name` | Rename |
+| `step_position` (string) | `step_position` (int) | Cast |
+| `uo_sequence` | `unit_operations` | Rename |
+| `case_refs` / `cases` | `case_ids` | Rename |
+| `name` (top-level) | `variant_name` | Rename |
+
 ## File References
 
 | File | Purpose |
@@ -137,6 +224,8 @@ For each case card:
 | `scripts/field_transforms.py` | Step field renaming + equipment/software parsing |
 | `scripts/metadata_builder.py` | Metadata block construction + completeness scoring |
 | `scripts/case_migrator.py` | Single case card migration + enrichment |
+| `scripts/variant_migrator.py` | Variant file structure migration (components flattening) |
+| `scripts/audit_fixer.py` | Audit-driven targeted fix + fix_status recording |
 | `scripts/workflow_migrator.py` | Full workflow migration + enrichment orchestration |
 | `scripts/migrate_batch.py` | CLI entry point + batch orchestration |
 | `scripts/paper_enricher.py` | PubMed API integration for paper metadata |
@@ -146,14 +235,15 @@ For each case card:
 ## Safety
 
 - **Double backup**: `_versions/pre_migration/` (Phase A) + `_versions/pre_enrichment/` (Phase B)
-- **Canonical passthrough**: Already-canonical cards are never modified (Phase A)
-- **Enrichment idempotency**: `is_enriched()` checks completeness.score > 0 + metadata.pmid present
+- **Canonical passthrough**: Already-canonical cards are never modified (Phase A); checks both key existence AND required sub-fields (completeness.score, workflow_context.workflow_id)
+- **Enrichment idempotency**: `is_enriched()` checks completeness.score > 0 + metadata.pmid present; bypassed for cases with pending audit violations
+- **Audit fix idempotency**: Violations with `fix_status: "resolved"` are skipped on re-run
 - **API failure isolation**: One paper's PubMed failure doesn't affect other case cards
 - **Rate limiting**: PubMed/PMC/Europe PMC 0.4s/request (3 req/sec)
 - **Full text fallback**: PMC OA → Europe PMC → abstract only (graceful degradation)
 - **Memory protection**: Full text capped at 200k chars; Methods section preferred over full body
 - **Data preservation**: Enrichment only adds/updates, never deletes existing values
-- **Dry-run mode**: `--dry-run` previews all changes without writing
+- **Dry-run mode**: `--dry-run` previews all changes without writing; fix_status set to "skipped"
 
 ## Report Sections
 
@@ -184,6 +274,12 @@ For each case card:
 ```
 /wf-audit                                    # 1. Audit all workflows
 /wf-migrate --dry-run --priority medium      # 2. Preview changes
-/wf-migrate --priority medium                # 3. Execute (Phase A + B)
-/wf-audit                                    # 4. Re-audit to verify improvement
+/wf-migrate --priority medium                # 3. Execute (Phase A + A.5 + B)
+# No need to re-audit: audit_report.json is updated with fix_status
+/wf-migrate --priority medium                # 4. Re-run: skips already-resolved violations
 ```
+
+After migration, check `audit_report.json` for:
+- `migration_applied.resolved` — number of violations fixed
+- `migration_applied.unresolved` — violations requiring manual review
+- Each violation's `fix_status` for per-field resolution detail

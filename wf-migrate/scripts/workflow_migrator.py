@@ -37,6 +37,70 @@ def update_statistics(stats: dict) -> tuple[dict, list[str]]:
     return updated, changes
 
 
+_CANONICAL_STAT_FIELDS = {
+    "papers_analyzed": 0,
+    "cases_collected": 0,
+    "variants_identified": 0,
+    "total_uos": 0,
+    "qc_checkpoints": 0,
+    "confidence_score": 0.0,
+}
+
+
+def _compute_stat_defaults(wf_dir: Path) -> dict:
+    """Compute sensible defaults for missing statistics fields by counting files."""
+    defaults = dict(_CANONICAL_STAT_FIELDS)
+    papers_dir = wf_dir / "01_papers"
+    if not papers_dir.exists():
+        papers_dir = wf_dir / "01_literature"
+    pl = papers_dir / "paper_list.json" if papers_dir.exists() else None
+    if pl and pl.exists():
+        try:
+            data = json.loads(pl.read_text(encoding="utf-8"))
+            papers = data.get("papers", data) if isinstance(data, dict) else data
+            if isinstance(papers, list):
+                defaults["papers_analyzed"] = len(papers)
+        except (json.JSONDecodeError, OSError):
+            pass
+    cases_dir = wf_dir / "02_cases"
+    if cases_dir.exists():
+        defaults["cases_collected"] = len(list(cases_dir.glob("case_C*.json")))
+    wf_dir_04 = wf_dir / "04_workflow"
+    if wf_dir_04.exists():
+        defaults["variants_identified"] = len(list(wf_dir_04.glob("variant_V*.json")))
+    return defaults
+
+
+def migrate_composition_data(comp_data: dict, wf_dir: Path) -> tuple[dict, list[str]]:
+    """Migrate composition_data.json to canonical format.
+
+    Transforms:
+    - modularity.boundary_inputs/outputs: object array -> string array
+    - statistics: rename legacy fields + fill missing canonical fields
+    """
+    changes: list[str] = []
+
+    mod = comp_data.get("modularity", {})
+    for key in ("boundary_inputs", "boundary_outputs"):
+        items = mod.get(key, [])
+        if items and isinstance(items[0], dict):
+            mod[key] = [item.get("name", str(item)) for item in items]
+            changes.append(f"{key}: object-to-string ({len(items)} items)")
+
+    stats = comp_data.get("statistics", {})
+    stats, rename_changes = update_statistics(stats)
+    changes.extend(rename_changes)
+
+    defaults = _compute_stat_defaults(wf_dir)
+    for field, default in defaults.items():
+        if field not in stats:
+            stats[field] = default
+            changes.append(f"statistics.{field}: added default {default}")
+    comp_data["statistics"] = stats
+
+    return comp_data, changes
+
+
 def _backup_cases(wf_dir: Path) -> Path:
     """Copy 02_cases/ to _versions/pre_migration/02_cases/.
 
@@ -123,26 +187,39 @@ def migrate_workflow(wf_dir: Path, dry_run: bool = False) -> dict:
             with open(case_path, "w", encoding="utf-8") as f:
                 json.dump(migrated_dict, f, indent=2)
 
-    # 5. Update statistics
-    stats_changes: list[str] = []
-    if "statistics" in comp_data:
-        updated_stats, stats_changes = update_statistics(comp_data["statistics"])
-        if not dry_run and stats_changes:
-            comp_data["statistics"] = updated_stats
+    # 5. Migrate composition_data.json (statistics + modularity)
+    comp_changes: list[str] = []
+    if comp_data:
+        comp_data, comp_changes = migrate_composition_data(comp_data, wf_dir)
+        if not dry_run and comp_changes:
             with open(comp_path, "w", encoding="utf-8") as f:
-                json.dump(comp_data, f, indent=2)
+                json.dump(comp_data, f, indent=2, ensure_ascii=False)
 
-    # 6. Build report
+    # 6. Migrate variant files
+    variant_changes: dict[str, list[str]] = {}
+    wf_dir_04 = wf_dir / "04_workflow"
+    if wf_dir_04.exists():
+        try:
+            from variant_migrator import migrate_variant_file
+            for vf in sorted(wf_dir_04.glob("variant_V*.json")):
+                result = migrate_variant_file(vf, dry_run=dry_run)
+                if result.get("changes"):
+                    variant_changes[vf.name] = result["changes"]
+        except ImportError:
+            pass
+
+    # 7. Build report
     now = datetime.now(timezone.utc).isoformat()
     report = {
-        "migration_version": "1.0.0",
+        "migration_version": "2.2.0",
         "migrated_at": now,
         "timestamp": now,
         "workflow_id": workflow_id,
         "migrated_cases": migrated_cases,
         "skipped_cases": skipped_cases,
         "total_changes": total_changes,
-        "statistics_changes": stats_changes,
+        "composition_data_changes": comp_changes,
+        "variant_changes": variant_changes,
         "per_case_changes": per_case_changes,
     }
 
@@ -201,7 +278,8 @@ def _backup_for_enrichment(wf_dir: Path) -> Path:
     return backup_dir
 
 
-def enrich_workflow(wf_dir: Path, dry_run: bool = False) -> dict:
+def enrich_workflow(wf_dir: Path, dry_run: bool = False,
+                    case_violation_map: dict[str, bool] | None = None) -> dict:
     """Enrich all case cards in a workflow directory using PubMed data.
 
     Automatically runs Phase A (mechanical migration) first to ensure
@@ -217,12 +295,14 @@ def enrich_workflow(wf_dir: Path, dry_run: bool = False) -> dict:
     Args:
         wf_dir: workflow directory path
         dry_run: if True, compute changes but don't write files
+        case_violation_map: {filename: True} for cases with pending audit violations
 
     Returns:
         Enrichment report dict (includes Phase A migration summary).
     """
     wf_dir = Path(wf_dir)
     now = datetime.now(timezone.utc).isoformat()
+    case_violation_map = case_violation_map or {}
 
     # Phase A — Mechanical migration first (idempotent: skips canonical cards)
     migration_report = migrate_workflow(wf_dir, dry_run=dry_run)
@@ -280,8 +360,9 @@ def enrich_workflow(wf_dir: Path, dry_run: bool = False) -> dict:
         with open(case_path, encoding="utf-8") as f:
             case_data = json.load(f)
 
-        # Idempotency check
-        if is_enriched(case_data):
+        # Idempotency check (bypass if case has pending audit violations)
+        case_has_violations = case_path.name in case_violation_map
+        if is_enriched(case_data, has_violations=case_has_violations):
             skipped_cases += 1
             per_case_changes[case_path.name] = ["Already enriched — skipped"]
             continue

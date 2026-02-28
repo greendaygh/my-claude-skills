@@ -10,6 +10,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from workflow_migrator import enrich_workflow
+from audit_fixer import (load_pending_violations, get_case_violation_map,
+                          apply_targeted_fixes, update_audit_report)
 
 
 # Priority ordering (lower index = higher severity)
@@ -79,9 +81,47 @@ def migrate_batch(base_dir: Path, targets: list[str] = None,
             time.sleep(30)
 
         try:
-            report = enrich_workflow(wf_dir, dry_run=dry_run)
+            # Load pending audit violations for this workflow
+            pending = load_pending_violations(wf_dir)
+            case_violations = get_case_violation_map(pending) if pending else {}
+
+            # Read pre-migration score
+            pre_score = 0.0
+            audit_path = wf_dir / "00_metadata" / "audit_report.json"
+            if audit_path.exists():
+                try:
+                    audit_data = json.loads(audit_path.read_text(encoding="utf-8"))
+                    pre_score = audit_data.get("conformance_score", 0.0)
+                except (json.JSONDecodeError, OSError):
+                    pass
+
+            # Phase A + B (mechanical migration + enrichment)
+            report = enrich_workflow(wf_dir, dry_run=dry_run,
+                                     case_violation_map=case_violations)
+
+            # Phase A.5: audit-driven targeted fixes on remaining violations
+            fix_results = []
+            if pending:
+                pending_after = load_pending_violations(wf_dir)
+                if pending_after:
+                    fix_results = apply_targeted_fixes(wf_dir, pending_after, dry_run=dry_run)
+                    report["audit_fixes"] = {
+                        "total": len(fix_results),
+                        "resolved": sum(1 for f in fix_results if f.get("fix_status") == "resolved"),
+                        "unresolved": sum(1 for f in fix_results if f.get("fix_status") == "unresolved"),
+                        "skipped": sum(1 for f in fix_results if f.get("fix_status") == "skipped"),
+                    }
+
+            # Update audit_report.json with fix_status
+            if not dry_run and (fix_results or pending):
+                update_audit_report(wf_dir, fix_results, pre_score=pre_score)
+
             reports.append(report)
-            print(f"  [OK] {wf_id} ({i+1}/{len(workflow_ids)})", flush=True)
+            fix_summary = ""
+            if fix_results:
+                resolved = sum(1 for f in fix_results if f.get("fix_status") == "resolved")
+                fix_summary = f" audit-fixes: {resolved}/{len(fix_results)}"
+            print(f"  [OK] {wf_id} ({i+1}/{len(workflow_ids)}){fix_summary}", flush=True)
         except Exception as e:
             print(f"  [ERR] {wf_id}: {e}", flush=True)
             reports.append({

@@ -277,7 +277,7 @@ def test_migrate_case_card_preserves_extra_fields():
 # ---------------------------------------------------------------------------
 
 def test_is_canonical():
-    """is_canonical() returns True for v2 cards, False for legacy."""
+    """is_canonical() returns True for v2 cards with required sub-fields, False for legacy."""
     legacy = {
         "case_id": "WB140-C001",
         "paper_id": "P001",
@@ -289,9 +289,9 @@ def test_is_canonical():
     canonical = {
         "case_id": "WB140-C001",
         "metadata": {},
-        "completeness": {},
+        "completeness": {"score": 0.8},
         "flow_diagram": "",
-        "workflow_context": {},
+        "workflow_context": {"workflow_id": "WB140"},
         "steps": [],
     }
     assert is_canonical(canonical) is True
@@ -300,11 +300,22 @@ def test_is_canonical():
     partial = {
         "case_id": "WB140-C001",
         "metadata": {},
-        "completeness": {},
+        "completeness": {"score": 0.5},
         "flow_diagram": "",
         "steps": [],
     }
     assert is_canonical(partial) is False
+
+    # Keys present but missing required sub-fields
+    incomplete_sub = {
+        "case_id": "WB140-C001",
+        "metadata": {},
+        "completeness": {"notes": "no score"},
+        "flow_diagram": "",
+        "workflow_context": {"boundary_inputs": []},
+        "steps": [],
+    }
+    assert is_canonical(incomplete_sub) is False
 
 
 # ---------------------------------------------------------------------------

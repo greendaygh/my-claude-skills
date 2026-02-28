@@ -155,6 +155,53 @@ Each violation includes actionable location info:
 | >= 0.3 | high |
 | < 0.3 | critical |
 
+## Progress Monitoring
+
+### Script-level progress (`--verbose` / `verbose=True`)
+
+Both `audit_workflow.py` and `audit_batch.py` support a `verbose` mode that
+prints progress to stderr while keeping stdout clean for JSON output.
+
+**Single workflow** — 14 file types reported one by one:
+```
+  [1/14] composition_data: 0.067 (14 violations)
+  [2/14] case_cards(31): 0.976 (2 violations)
+  ...
+  [14/14] workflow_context: 1.000
+  => WB005: conformance=0.639 priority=medium
+```
+
+**Batch CLI** — per-workflow progress:
+```bash
+python3 scripts/audit_batch.py /path/to/workflows --verbose
+```
+
+### Agent intermediate reporting (Batch Mode)
+
+When running a batch audit, the agent MUST report intermediate results
+to the user so they can monitor progress. Follow this protocol:
+
+1. **After Discover**: Report the total number of workflows found.
+2. **Audit in chunks of 5 workflows** using `audit_workflows_chunked()`.
+   After each chunk, show a progress table to the user:
+
+   ```
+   --- Progress: 10/40 complete ---
+   | Workflow | Score | Priority | Violations |
+   |----------|-------|----------|------------|
+   | WB005    | 0.639 | medium   | 61         |
+   | WB010    | 0.721 | low      | 23         |
+   | WB020    | 0.558 | medium   | 45         |
+   | WB025    | 0.612 | medium   | 38         |
+   | WB030    | 0.445 | high     | 52         |
+
+   Cumulative: avg 0.595, critical: 0, high: 1, medium: 3, low: 1
+   ```
+
+3. **After all chunks**: Show final summary and save audit_summary.json.
+4. **Single workflow audit**: Use `verbose=True` and show the 14-step
+   per-file-type progress directly to the user.
+
 ## File References
 
 | File | Purpose |

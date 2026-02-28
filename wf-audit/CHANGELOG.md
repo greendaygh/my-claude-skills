@@ -1,5 +1,23 @@
 # Changelog — wf-audit
 
+## [2.1.0] — 2026-02-28
+
+### Added
+- **Verbose progress mode** (`--verbose` / `verbose=True`) for both single and batch audits
+  - Single workflow: 14-step per-file-type progress to stderr
+  - Batch: per-workflow score/priority progress
+- **Chunked batch API** `audit_workflows_chunked()` yielding `(chunk_index, chunk_results, total)` for agent intermediate reporting
+- `_log_step()` helper for consistent progress formatting
+- `_violation_count()` helper for score entry extraction
+- `--verbose` / `-v` CLI flag in `audit_batch.py`
+- Agent intermediate reporting protocol in SKILL.md (chunk-of-5 progress tables)
+
+### Changed
+- `audit_single_workflow()` and `audit_all_workflows()` accept `verbose` parameter
+- `audit_batch.py` — extracted `_filter_dirs()` helper, removed redundant docstrings/comments
+- All 14 file type checks now emit progress via `_log_step()` when verbose
+- Final aggregate score/priority summary printed when verbose
+
 ## [2.0.0] — 2026-02-28
 
 ### Added

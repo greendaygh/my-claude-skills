@@ -1,6 +1,7 @@
 """Single workflow deep audit."""
 
 import json
+import sys
 from pathlib import Path
 from scoring import (
     ScoredResult,
@@ -22,6 +23,23 @@ from scoring import (
 from referential_integrity import run_all as run_integrity_checks
 from canonical_schemas import SCHEMA_VERSION
 from datetime import datetime, timezone
+
+
+_TOTAL_STEPS = 14
+
+
+def _log_step(step: int, name: str, score: float, violations: int = 0,
+              count: int | None = None, *, verbose: bool):
+    """Print a single progress line to stderr when verbose is enabled."""
+    if not verbose:
+        return
+    count_str = f"({count})" if count is not None else ""
+    viol_str = f" ({violations} violations)" if violations else ""
+    sys.stderr.write(
+        f"  [{step}/{_TOTAL_STEPS}] {name}{count_str}: "
+        f"{score:.3f}{viol_str}\n"
+    )
+    sys.stderr.flush()
 
 
 # ---------------------------------------------------------------------------
@@ -189,11 +207,17 @@ def _build_migration_recommendations(scores: dict, era_info: dict) -> list:
     return unique
 
 
+def _violation_count(entry: dict) -> int:
+    """Extract violation count from a score entry dict."""
+    return len(entry.get("violations", []))
+
+
 # ---------------------------------------------------------------------------
 # audit_single_workflow
 # ---------------------------------------------------------------------------
 
-def audit_single_workflow(wf_dir: Path, catalog: dict = None) -> dict:
+def audit_single_workflow(wf_dir: Path, catalog: dict = None,
+                          verbose: bool = False) -> dict:
     """Run a deep audit of a single workflow directory."""
     wf_dir = Path(wf_dir)
     scores_raw = {}
@@ -205,6 +229,8 @@ def audit_single_workflow(wf_dir: Path, catalog: dict = None) -> dict:
     comp_result = score_composition_data(comp_data, source_file=_rel_path(wf_dir, comp_path))
     scores_raw["composition_data"] = comp_result.score
     all_violations["composition_data"] = _build_score_entry(comp_result)
+    _log_step(1, "composition_data", comp_result.score,
+              len(comp_result.violations), verbose=verbose)
 
     # 2. Case cards from 02_cases/case_C*.json
     cases_dir = wf_dir / "02_cases"
@@ -228,6 +254,9 @@ def audit_single_workflow(wf_dir: Path, catalog: dict = None) -> dict:
         "violations": list(dict.fromkeys(case_violations_flat)),
         "detailed_violations": case_detailed,
     }
+    _log_step(2, "case_cards", case_avg,
+              len(set(case_violations_flat)), count=len(case_results),
+              verbose=verbose)
 
     # 3. paper_list.json
     paper_data = None
@@ -241,6 +270,8 @@ def audit_single_workflow(wf_dir: Path, catalog: dict = None) -> dict:
     paper_result = score_paper_list(paper_data if paper_data is not None else {}, source_file=paper_source)
     scores_raw["paper_list"] = paper_result.score
     all_violations["paper_list"] = _build_score_entry(paper_result)
+    _log_step(3, "paper_list", paper_result.score,
+              len(paper_result.violations), verbose=verbose)
 
     # 4. Variant files from 04_workflow/variant_*.json
     variant_dir = wf_dir / "04_workflow"
@@ -264,6 +295,9 @@ def audit_single_workflow(wf_dir: Path, catalog: dict = None) -> dict:
         "violations": list(dict.fromkeys(variant_violations_flat)),
         "detailed_violations": variant_detailed,
     }
+    _log_step(4, "variant_files", variant_avg,
+              len(set(variant_violations_flat)), count=len(variant_results),
+              verbose=verbose)
 
     # 5. composition_report.md
     report_path = wf_dir / "composition_report.md"
@@ -276,6 +310,8 @@ def audit_single_workflow(wf_dir: Path, catalog: dict = None) -> dict:
                                      schema_group="report")
     scores_raw["report_sections"] = report_result.score
     all_violations["report_sections"] = _build_score_entry(report_result)
+    _log_step(5, "report_sections", report_result.score,
+              len(report_result.violations), verbose=verbose)
 
     # 6. uo_mapping.json (Pydantic-based)
     uo_map_path = wf_dir / "04_workflow" / "uo_mapping.json"
@@ -284,6 +320,8 @@ def audit_single_workflow(wf_dir: Path, catalog: dict = None) -> dict:
         uo_result = score_uo_mapping(uo_data, source_file=_rel_path(wf_dir, uo_map_path))
         scores_raw["uo_mapping"] = uo_result.score
         all_violations["uo_mapping"] = _build_score_entry(uo_result)
+        _log_step(6, "uo_mapping", uo_result.score,
+                  len(uo_result.violations), verbose=verbose)
     else:
         scores_raw["uo_mapping"] = 0.0
         all_violations["uo_mapping"] = {
@@ -291,8 +329,9 @@ def audit_single_workflow(wf_dir: Path, catalog: dict = None) -> dict:
             "violations": ["missing or empty: 04_workflow/uo_mapping.json"],
             "detailed_violations": [],
         }
+        _log_step(6, "uo_mapping", 0.0, 1, verbose=verbose)
 
-    # 7. Referential integrity (unchanged)
+    # 7. Referential integrity
     paper_validity_info = {}
     try:
         integrity_results = run_integrity_checks(wf_dir, catalog)
@@ -315,6 +354,8 @@ def audit_single_workflow(wf_dir: Path, catalog: dict = None) -> dict:
         "violations": all_integrity_violations,
         "detailed_violations": [],
     }
+    _log_step(7, "referential_integrity", integrity_score,
+              len(all_integrity_violations), verbose=verbose)
 
     # --- New file types (8-14) ---
 
@@ -324,8 +365,11 @@ def audit_single_workflow(wf_dir: Path, catalog: dict = None) -> dict:
     if isinstance(cs_data, dict):
         cs_result = score_case_summary(cs_data, source_file=_rel_path(wf_dir, cs_path))
         all_violations["case_summary"] = _build_score_entry(cs_result)
+        _log_step(8, "case_summary", cs_result.score,
+                  len(cs_result.violations), verbose=verbose)
     else:
         all_violations["case_summary"] = {"score": 0.0, "violations": ["missing: case_summary.json"], "detailed_violations": []}
+        _log_step(8, "case_summary", 0.0, 1, verbose=verbose)
 
     # 9. cluster_result.json
     cr_path = wf_dir / "03_analysis" / "cluster_result.json"
@@ -333,8 +377,11 @@ def audit_single_workflow(wf_dir: Path, catalog: dict = None) -> dict:
     if isinstance(cr_data, dict):
         cr_result = score_cluster_result(cr_data, source_file=_rel_path(wf_dir, cr_path))
         all_violations["cluster_result"] = _build_score_entry(cr_result)
+        _log_step(9, "cluster_result", cr_result.score,
+                  len(cr_result.violations), verbose=verbose)
     else:
         all_violations["cluster_result"] = {"score": 0.0, "violations": ["missing: cluster_result.json"], "detailed_violations": []}
+        _log_step(9, "cluster_result", 0.0, 1, verbose=verbose)
 
     # 10. common_pattern.json
     cp_path = wf_dir / "03_analysis" / "common_pattern.json"
@@ -342,8 +389,11 @@ def audit_single_workflow(wf_dir: Path, catalog: dict = None) -> dict:
     if isinstance(cp_data, dict):
         cp_result = score_common_pattern(cp_data, source_file=_rel_path(wf_dir, cp_path))
         all_violations["common_pattern"] = _build_score_entry(cp_result)
+        _log_step(10, "common_pattern", cp_result.score,
+                  len(cp_result.violations), verbose=verbose)
     else:
         all_violations["common_pattern"] = {"score": 0.0, "violations": ["missing: common_pattern.json"], "detailed_violations": []}
+        _log_step(10, "common_pattern", 0.0, 1, verbose=verbose)
 
     # 11. parameter_ranges.json
     pr_path = wf_dir / "03_analysis" / "parameter_ranges.json"
@@ -351,8 +401,11 @@ def audit_single_workflow(wf_dir: Path, catalog: dict = None) -> dict:
     if isinstance(pr_data, dict):
         pr_result = score_parameter_ranges(pr_data, source_file=_rel_path(wf_dir, pr_path))
         all_violations["parameter_ranges"] = _build_score_entry(pr_result)
+        _log_step(11, "parameter_ranges", pr_result.score,
+                  len(pr_result.violations), verbose=verbose)
     else:
         all_violations["parameter_ranges"] = {"score": 0.0, "violations": ["missing: parameter_ranges.json"], "detailed_violations": []}
+        _log_step(11, "parameter_ranges", 0.0, 1, verbose=verbose)
 
     # 12. step_alignment.json
     sa_path = wf_dir / "03_analysis" / "step_alignment.json"
@@ -360,8 +413,11 @@ def audit_single_workflow(wf_dir: Path, catalog: dict = None) -> dict:
     if isinstance(sa_data, dict):
         sa_result = score_step_alignment(sa_data, source_file=_rel_path(wf_dir, sa_path))
         all_violations["step_alignment"] = _build_score_entry(sa_result)
+        _log_step(12, "step_alignment", sa_result.score,
+                  len(sa_result.violations), verbose=verbose)
     else:
         all_violations["step_alignment"] = {"score": 0.0, "violations": ["missing: step_alignment.json"], "detailed_violations": []}
+        _log_step(12, "step_alignment", 0.0, 1, verbose=verbose)
 
     # 13. qc_checkpoints.json
     qc_path = wf_dir / "04_workflow" / "qc_checkpoints.json"
@@ -369,6 +425,10 @@ def audit_single_workflow(wf_dir: Path, catalog: dict = None) -> dict:
     if isinstance(qc_data, dict):
         qc_result = score_qc_checkpoints(qc_data, source_file=_rel_path(wf_dir, qc_path))
         all_violations["qc_checkpoints"] = _build_score_entry(qc_result)
+        _log_step(13, "qc_checkpoints", qc_result.score,
+                  len(qc_result.violations), verbose=verbose)
+    else:
+        _log_step(13, "qc_checkpoints", 0.0, 0, verbose=verbose)
 
     # 14. workflow_context.json
     wc_path = wf_dir / "00_metadata" / "workflow_context.json"
@@ -376,6 +436,10 @@ def audit_single_workflow(wf_dir: Path, catalog: dict = None) -> dict:
     if isinstance(wc_data, dict):
         wc_result = score_workflow_context(wc_data, source_file=_rel_path(wf_dir, wc_path))
         all_violations["workflow_context"] = _build_score_entry(wc_result)
+        _log_step(14, "workflow_context", wc_result.score,
+                  len(wc_result.violations), verbose=verbose)
+    else:
+        _log_step(14, "workflow_context", 0.0, 0, verbose=verbose)
 
     # --- Aggregate ---
     aggregate_score = aggregate_workflow_score(scores_raw)
@@ -383,12 +447,21 @@ def audit_single_workflow(wf_dir: Path, catalog: dict = None) -> dict:
     existing_validation = load_existing_validation(wf_dir)
     migration_recs = _build_migration_recommendations(all_violations, era_info)
 
+    wf_id = comp_data.get("workflow_id", wf_dir.name)
+    priority = get_migration_priority(aggregate_score)
+    if verbose:
+        sys.stderr.write(
+            f"  => {wf_id}: conformance={aggregate_score:.3f} "
+            f"priority={priority}\n"
+        )
+        sys.stderr.flush()
+
     return {
         "audit_version": SCHEMA_VERSION,
         "audited_at": datetime.now(timezone.utc).isoformat(),
-        "workflow_id": comp_data.get("workflow_id", wf_dir.name),
+        "workflow_id": wf_id,
         "conformance_score": aggregate_score,
-        "migration_priority": get_migration_priority(aggregate_score),
+        "migration_priority": priority,
         "schema_era": era_info["era"],
         "step_field_style": era_info["step_field_style"],
         "scores": all_violations,

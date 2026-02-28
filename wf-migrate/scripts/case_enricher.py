@@ -589,11 +589,15 @@ def enrich_case_card(case_data: dict, paper_info: dict,
     return enriched
 
 
-def is_enriched(case_data: dict) -> bool:
+def is_enriched(case_data: dict, has_violations: bool = False) -> bool:
     """Check if a case card has already been enriched.
 
     Enriched = has completeness with score > 0 AND metadata.pmid is non-empty.
+    If has_violations is True, always returns False to allow re-enrichment
+    of cards that still have audit violations.
     """
+    if has_violations:
+        return False
     completeness = case_data.get("completeness", {})
     score = completeness.get("score", 0)
     if isinstance(score, (int, float)) and score > 0:

@@ -21,8 +21,21 @@ _CANONICAL_CASE_ID_RE = re.compile(r"^W[BTDL]\d{3}-C\d{3,}$")
 
 
 def is_canonical(case_data: dict) -> bool:
-    """Check if a case card is already in canonical format."""
-    return all(k in case_data for k in _CANONICAL_MARKERS)
+    """Check if a case card is already in canonical format.
+
+    Verifies both key existence AND required sub-fields:
+    - completeness must contain 'score'
+    - workflow_context must contain 'workflow_id'
+    """
+    if not all(k in case_data for k in _CANONICAL_MARKERS):
+        return False
+    comp = case_data.get("completeness", {})
+    if not isinstance(comp, dict) or "score" not in comp:
+        return False
+    wctx = case_data.get("workflow_context", {})
+    if not isinstance(wctx, dict) or "workflow_id" not in wctx:
+        return False
+    return True
 
 
 def _fix_case_id(case_id: str, workflow_id: str) -> tuple[str, str | None]:
@@ -148,9 +161,10 @@ def enrich_case_card(case_data: dict, paper_info: dict,
     return _enrich_case_card_impl(case_data, paper_info, composition_data)
 
 
-def is_enriched(case_data: dict) -> bool:
+def is_enriched(case_data: dict, has_violations: bool = False) -> bool:
     """Check if a case card has already been enriched (idempotency guard).
 
     Enriched = completeness.score > 0 AND metadata.pmid is non-empty.
+    If has_violations is True, always returns False to allow re-enrichment.
     """
-    return _is_enriched_impl(case_data)
+    return _is_enriched_impl(case_data, has_violations=has_violations)
