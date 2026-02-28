@@ -18,9 +18,28 @@ import json
 from pathlib import Path
 from datetime import datetime
 
-__version__ = "3.0.0"
+__version__ = "3.1.0"
 
 SCHEMA_VERSION = "4.0.0"
+
+
+def _extract_uo_list(variant_data: dict) -> list[dict]:
+    """Extract UO list: canonical (unit_operations) first, legacy (uo_sequence) fallback."""
+    return variant_data.get("unit_operations",
+                            variant_data.get("uo_sequence", []))
+
+
+def _get_component(uo: dict, key: str) -> dict:
+    """Get component dict: canonical uo[key] first, legacy uo['components'][key] fallback."""
+    direct = uo.get(key)
+    if isinstance(direct, dict):
+        return direct
+    return uo.get("components", {}).get(key, {})
+
+
+def _get_variant_name(variant_data: dict) -> str:
+    """Get variant name: canonical (variant_name) first, legacy (name) fallback."""
+    return variant_data.get("variant_name", variant_data.get("name", "?"))
 
 # Standard top-level key order for composition_data.json
 STANDARD_KEY_ORDER = [
@@ -52,16 +71,22 @@ def _compute_confidence(variants: dict) -> float:
     }
     scores = []
     for vid, vd in variants.items():
-        for uo in vd.get("uo_sequence", []):
+        for uo in _extract_uo_list(vd):
             tag = uo.get("evidence_tag", "")
             if tag in TAG_SCORES:
                 scores.append(TAG_SCORES[tag])
-            # Check component-level tags
-            for comp in uo.get("components", {}).values():
+            for comp_key in ("input", "output", "equipment", "consumables",
+                             "material_and_method", "result", "discussion"):
+                comp = _get_component(uo, comp_key)
                 if isinstance(comp, dict):
                     ctag = comp.get("evidence_tag", "")
                     if ctag in TAG_SCORES:
                         scores.append(TAG_SCORES[ctag])
+                    for item in comp.get("items", []):
+                        if isinstance(item, dict):
+                            itag = item.get("evidence_tag", "")
+                            if itag in TAG_SCORES:
+                                scores.append(TAG_SCORES[itag])
     if not scores:
         return 0.80
     return round(sum(scores) / len(scores), 2)
@@ -134,14 +159,14 @@ def generate_limitations(wf_dir: str | Path) -> tuple[list, dict]:
     expert_inference_count = 0
     for vf in variant_files:
         vd = load_json(vf)
-        for uo in vd.get("uo_sequence", []):
-            components = uo.get("components", {})
-            for comp_name, comp_val in components.items():
+        for uo in _extract_uo_list(vd):
+            for comp_key in ("input", "output", "equipment", "consumables",
+                             "material_and_method", "result", "discussion"):
+                comp_val = _get_component(uo, comp_key)
                 if isinstance(comp_val, dict):
                     if comp_val.get("evidence_tag") == "expert-inference":
                         expert_inference_count += 1
-                elif isinstance(comp_val, list):
-                    for item in comp_val:
+                    for item in comp_val.get("items", []):
                         if isinstance(item, dict) and item.get("evidence_tag") == "expert-inference":
                             expert_inference_count += 1
 
@@ -175,10 +200,11 @@ def generate_limitations(wf_dir: str | Path) -> tuple[list, dict]:
     for vf in variant_files:
         vd = load_json(vf)
         vid = vd.get("variant_id", vf.stem)
-        for uo in vd.get("uo_sequence", []):
+        for uo in _extract_uo_list(vd):
             uo_id = uo.get("uo_id", "")
-            components = uo.get("components", {})
-            for comp_name, comp_val in components.items():
+            for comp_name in ("input", "output", "equipment", "consumables",
+                              "material_and_method", "result", "discussion"):
+                comp_val = _get_component(uo, comp_name)
                 is_missing = False
                 if isinstance(comp_val, str) and "[미기재]" in comp_val:
                     is_missing = True
@@ -255,7 +281,7 @@ def generate_composition_report(wf_dir: str | Path) -> str:
     for vf in variant_files:
         vd = load_json(vf)
         variants_data.append(vd)
-        total_uos += len(vd.get("uo_sequence", []))
+        total_uos += len(_extract_uo_list(vd))
 
     num_qc = len(qc_checkpoints.get("checkpoints", []))
     num_papers = len(paper_list.get("papers", []))
@@ -346,7 +372,7 @@ def generate_composition_report(wf_dir: str | Path) -> str:
 
     for vd in variants_data:
         vid = vd.get("variant_id", "?")
-        vname = vd.get("name", "?")
+        vname = _get_variant_name(vd)
         case_ids = vd.get("case_ids", [])
         report_lines.extend([
             f"### {vid}: {vname}",
@@ -355,7 +381,7 @@ def generate_composition_report(wf_dir: str | Path) -> str:
             "",
         ])
 
-        uo_seq = vd.get("uo_sequence", [])
+        uo_seq = _extract_uo_list(vd)
         if uo_seq:
             report_lines.append("#### UO Sequence")
             report_lines.append("")
@@ -427,10 +453,8 @@ def generate_composition_report(wf_dir: str | Path) -> str:
     sw_inv = []
     for vf in variant_files:
         vd = load_json(vf)
-        for uo in vd.get("uo_sequence", []):
-            components = uo.get("components", {})
-            # Equipment items
-            eq_comp = components.get("equipment", {})
+        for uo in _extract_uo_list(vd):
+            eq_comp = _get_component(uo, "equipment")
             eq_items = eq_comp.get("items", []) if isinstance(eq_comp, dict) else []
             for item in eq_items:
                 name = item.get("name", "")
@@ -441,8 +465,10 @@ def generate_composition_report(wf_dir: str | Path) -> str:
                         "manufacturer": item.get("manufacturer", "[미기재]"),
                         "uo_id": uo.get("uo_id", ""),
                     })
-            # Software items
-            sw_comp = components.get("parameters", components.get("environment", {}))
+            sw_comp = _get_component(uo, "material_and_method")
+            if not sw_comp:
+                sw_comp = uo.get("components", {}).get("parameters",
+                          uo.get("components", {}).get("environment", {}))
             sw_items = sw_comp.get("items", []) if isinstance(sw_comp, dict) else []
             for item in sw_items:
                 name = item.get("name", "")
@@ -492,18 +518,18 @@ def generate_composition_report(wf_dir: str | Path) -> str:
 
     evidence_counts = {}
     for vd in variants_data:
-        for uo in vd.get("uo_sequence", []):
+        for uo in _extract_uo_list(vd):
             uo_tag = uo.get("evidence_tag", "")
             if uo_tag:
                 evidence_counts[uo_tag] = evidence_counts.get(uo_tag, 0) + 1
-            components = uo.get("components", {})
-            for comp_name, comp_val in components.items():
+            for comp_key in ("input", "output", "equipment", "consumables",
+                             "material_and_method", "result", "discussion"):
+                comp_val = _get_component(uo, comp_key)
                 if isinstance(comp_val, dict):
                     tag = comp_val.get("evidence_tag", "")
                     if tag:
                         evidence_counts[tag] = evidence_counts.get(tag, 0) + 1
-                elif isinstance(comp_val, list):
-                    for item in comp_val:
+                    for item in comp_val.get("items", []):
                         if isinstance(item, dict):
                             tag = item.get("evidence_tag", "")
                             if tag:
@@ -683,7 +709,7 @@ def generate_composition_data(wf_dir: str | Path) -> dict:
         vd = load_json(vf)
         vid = vd.get("variant_id", vf.stem.split("_")[1])
         variants[vid] = vd
-        total_uos += len(vd.get("uo_sequence", []))
+        total_uos += len(_extract_uo_list(vd))
 
     # Generate limitations and catalog feedback
     limitations, catalog_feedback = generate_limitations(wf_dir)
@@ -766,11 +792,9 @@ def generate_composition_data(wf_dir: str | Path) -> dict:
     for vf in variant_files:
         vd = load_json(vf)
         vid = vd.get("variant_id", vf.stem.split("_")[1] if "_" in vf.stem else vf.stem)
-        for uo in vd.get("uo_sequence", []):
+        for uo in _extract_uo_list(vd):
             uo_id = uo.get("uo_id", "")
-            components = uo.get("components", {})
-            # Equipment items
-            eq_comp = components.get("equipment", {})
+            eq_comp = _get_component(uo, "equipment")
             eq_items = eq_comp.get("items", []) if isinstance(eq_comp, dict) else []
             for item in eq_items:
                 name = item.get("name", "")
@@ -788,7 +812,6 @@ def generate_composition_data(wf_dir: str | Path) -> dict:
                             "evidence_tag": item.get("evidence_tag", uo.get("evidence_tag", "")),
                         })
                     else:
-                        # Merge into existing
                         for eq in eq_inventory:
                             if (eq["name"], eq["model"]) == key:
                                 if uo_id not in eq["used_in_uos"]:
@@ -799,8 +822,10 @@ def generate_composition_data(wf_dir: str | Path) -> dict:
                                     if cr not in eq["case_refs"]:
                                         eq["case_refs"].append(cr)
                                 break
-            # Software items
-            sw_comp = components.get("parameters", components.get("environment", {}))
+            sw_comp = _get_component(uo, "material_and_method")
+            if not sw_comp:
+                sw_comp = uo.get("components", {}).get("parameters",
+                          uo.get("components", {}).get("environment", {}))
             sw_items = sw_comp.get("items", []) if isinstance(sw_comp, dict) else []
             for item in sw_items:
                 name = item.get("name", "")
@@ -907,11 +932,10 @@ def generate_composition_workflow(wf_dir: str | Path) -> str:
     if variants:
         lines.extend(["## Variants", ""])
         for vid, vd in sorted(variants.items()):
-            vname = vd.get("name", "?")
+            vname = _get_variant_name(vd)
             case_ids = vd.get("case_ids", [])
-            uo_seq = vd.get("uo_sequence", [])
+            uo_seq = _extract_uo_list(vd)
 
-            # UO sequence arrow string
             uo_ids = [uo.get("uo_id", "?") for uo in uo_seq]
             arrow_str = " → ".join(uo_ids)
 

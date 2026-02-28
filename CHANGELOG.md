@@ -1,5 +1,28 @@
 # Changelog
 
+## [1.7.0] — 2026-03-01
+
+### Housekeeping
+
+- Remove all `.pyc` files from git tracking (already in `.gitignore`)
+
+### wf-output (3.1.0)
+
+#### Added
+- **Canonical/legacy compatibility helpers** — `_extract_uo_list()`, `_get_component()`, `_get_variant_name()` for dual-format support
+- Item-level evidence tag scoring in `_compute_confidence()`
+
+#### Changed
+- All functions now use 7-component direct access (`input`, `output`, `equipment`, `consumables`, `material_and_method`, `result`, `discussion`) instead of generic `components` dict iteration
+- `generate_limitations()` reads component items via `_get_component()` helper
+- Equipment/software inventory extraction updated for canonical schema
+- Evidence tag counting uses explicit component keys
+
+### wf-migrate (2.5.0)
+
+#### Added
+- **Circuit breaker** in `paper_enricher.py` — stops enrichment after 3 adaptive pause cycles to prevent infinite retry loops
+
 ## [1.6.0] — 2026-03-01
 
 ### wf-audit (2.2.0)

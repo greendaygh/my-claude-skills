@@ -417,6 +417,8 @@ def enrich_paper_list(paper_data: dict | list, rate_delay: float = _REQUEST_DELA
     papers = normalized.get("papers", [])
 
     consecutive_failures = 0
+    total_adaptive_pauses = 0
+    max_adaptive_pauses = 3  # Circuit breaker: skip remaining after 3 pause cycles
     adaptive_delay = rate_delay
     skipped_count = 0
 
@@ -500,7 +502,11 @@ def enrich_paper_list(paper_data: dict | list, rate_delay: float = _REQUEST_DELA
         if api_failure:
             consecutive_failures += 1
             if consecutive_failures >= 3:
-                print("  [ADAPTIVE] 3+ consecutive failures, pausing 60s...", flush=True)
+                total_adaptive_pauses += 1
+                if total_adaptive_pauses > max_adaptive_pauses:
+                    print(f"  [CIRCUIT-BREAK] {max_adaptive_pauses} adaptive pauses reached, skipping remaining papers", flush=True)
+                    break
+                print(f"  [ADAPTIVE] 3+ consecutive failures, pausing 60s... (cycle {total_adaptive_pauses}/{max_adaptive_pauses})", flush=True)
                 time.sleep(60)
                 # Connectivity check
                 test = _http_get(
