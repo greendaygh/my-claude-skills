@@ -3,7 +3,7 @@
 SBLab KRIBB의 Claude Code 커스텀 스킬 모음.
 바이오파운드리 워크플로 구성, 과학 문헌 분석, 스킬 자동 생성 등을 지원합니다.
 
-**Version**: 1.4.0
+**Version**: 1.5.0
 
 ---
 
@@ -26,7 +26,7 @@ workflow-composer (Orchestrator v2.4)
 | **workflow-composer** | 2.4.0 | 5-Phase 오케스트레이터. 카탈로그 조회, 모드 감지(New/Update/Fresh), 서브스킬 위임 |
 | **wf-literature** | 2.0.0 | OpenAlex/PubMed 논문 검색, 품질 평가(PD+UC+ES), 7대 원칙 기반 케이스 카드 추출 |
 | **wf-analysis** | 2.0.0 | Step Alignment, 변형 클러스터링, Multi-signal UO 매핑, QC 체크포인트 설계, 7-Component 구조 |
-| **wf-output** | 2.1.0 | Schema v4.0.0 JSON, 13섹션 리포트, Mermaid 시각화, Validation Gate, 한국어 번역 |
+| **wf-output** | 2.2.0 | Schema v4.0.0 JSON, 13섹션 리포트, Mermaid 시각화 (compact/detailed), Validation Gate, 한국어 번역 |
 | **wf-audit** | 2.1.0 | Pydantic v2 기반 40개 워크플로 일괄 감사. 14-step verbose 진행률, chunked 배치, 13 파일 타입 검증 |
 | **wf-migrate** | 2.3.0 | 레거시 마이그레이션 + audit-driven targeted fix. verbose 진행률, variant/composition_data 변환, fix_status 추적 |
 

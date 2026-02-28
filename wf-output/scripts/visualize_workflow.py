@@ -44,6 +44,7 @@ COMPONENT_COLORS = {
     "parameters":  {"fill": "#D5A6E6", "stroke": "#8E44AD", "text": "#1A1A1A"},
     "consumables": {"fill": "#B5EAD7", "stroke": "#3D9970", "text": "#1A1A1A"},
     "environment": {"fill": "#B5EAD7", "stroke": "#3D9970", "text": "#1A1A1A"},
+    "material_and_method": {"fill": "#FFEAA7", "stroke": "#FDCB6E", "text": "#1A1A1A"},
 }
 
 UO_CONTAINER_STYLES = {
@@ -58,10 +59,29 @@ COMPONENT_PREFIXES = {
     "parameters": "PARAM",
     "consumables": "CONS",
     "environment": "ENV",
+    "material_and_method": "METHOD",
 }
 
 MAX_LABEL_LENGTH = 40
 MAX_EDGE_LABEL_LENGTH = 30
+MAX_ITEM_LENGTH = 60
+
+# ─── Compact Mode ───
+COMPACT_COMPONENT_ORDER_HW = [
+    "input", "equipment", "consumables", "material_and_method", "output",
+]
+COMPACT_COMPONENT_ORDER_SW = [
+    "input", "parameters", "environment", "material_and_method", "output",
+]
+COMPACT_PREFIXES = {
+    "input": "INPUT",
+    "output": "OUTPUT",
+    "equipment": "EQUIPMENT",
+    "parameters": "PARAMETERS",
+    "consumables": "CONSUMABLES",
+    "environment": "ENVIRONMENT",
+    "material_and_method": "METHOD",
+}
 
 
 def sanitize_mermaid_id(text: str) -> str:
@@ -79,6 +99,36 @@ def truncate_text(text: str, max_length: int = MAX_LABEL_LENGTH) -> str:
 def sanitize_mermaid_label(text: str) -> str:
     """Escape characters that break Mermaid labels."""
     return text.replace('"', "'").replace("#", "No.").replace("&", "+")
+
+
+def _extract_uo_list(variant_data: dict) -> list[dict]:
+    """Extract UO list, supporting canonical (unit_operations) and legacy (uo_sequence)."""
+    return variant_data.get("unit_operations",
+                            variant_data.get("uo_sequence", []))
+
+
+def _get_component(uo: dict, key: str) -> dict:
+    """Get component dict: canonical uo[key] first, then legacy uo['components'][key]."""
+    direct = uo.get(key)
+    if isinstance(direct, dict):
+        return direct
+    return uo.get("components", {}).get(key, {})
+
+
+def _extract_component_lines(comp_data: dict, max_chars: int = MAX_ITEM_LENGTH) -> list[str]:
+    """Extract all display lines from a component's items or text fields."""
+    lines = []
+    for item in comp_data.get("items", []):
+        name = item.get("name", "")
+        if name:
+            lines.append(truncate_text(name, max_chars))
+    if lines:
+        return lines
+    for field in ("description", "procedure", "environment"):
+        val = comp_data.get(field, "")
+        if val and isinstance(val, str):
+            lines.append(truncate_text(val, max_chars))
+    return lines
 
 
 def get_component_keys(uo_type: str) -> list:
@@ -106,21 +156,151 @@ def extract_component_label(component_data: dict, max_items: int = 2) -> str:
     return truncate_text(label)
 
 
-def generate_mermaid_graph(variant_data: dict, workflow_id: str, variant_id: str) -> str:
+def generate_compact_graph(variant_data: dict, workflow_id: str, variant_id: str) -> str:
+    """Generate compact Mermaid diagram for a workflow variant.
+
+    Each UO is a subgraph with component boxes arranged horizontally (LR).
+    All items are shown in full. QC checkpoints appear as diamond nodes
+    between UO subgraphs with Pass/Fail branching.
     """
-    Generate Mermaid diagram source for a workflow variant.
+    vname = variant_data.get("variant_name", variant_data.get("name", ""))
+    lines = [
+        f"%% {workflow_id} {variant_id}: {sanitize_mermaid_label(vname)}",
+        "%% Compact UO visualization (direction LR per step)",
+        "graph TD",
+    ]
 
-    Each UO is rendered as a subgraph containing up to 4 component nodes
-    (Input, Output, Equipment/Parameters, Consumables/Environment) with
-    consistent color coding. Inter-UO edges connect Output→Input nodes.
+    for comp_key, colors in COMPONENT_COLORS.items():
+        cls_name = f"comp_{comp_key}"
+        lines.append(
+            f"    classDef {cls_name} fill:{colors['fill']},"
+            f"stroke:{colors['stroke']},color:{colors['text']}"
+        )
+    lines.append(
+        f"    classDef qc fill:{COLORS['qc_fill']},"
+        f"stroke:{COLORS['qc_stroke']},color:{COLORS['text_color']}"
+    )
+    lines.append("")
 
-    Args:
-        variant_data: variant composition dict containing uo_sequence and qc_checkpoints
-        workflow_id: e.g., "WB030"
-        variant_id: e.g., "V1"
+    uo_list = _extract_uo_list(variant_data)
+    if not uo_list:
+        lines.append('    empty["No unit operations found"]')
+        return "\n".join(lines)
 
-    Returns:
-        Mermaid source string
+    # Pre-scan QC checkpoints
+    qc_map: dict[int, dict] = {}
+    qc_counter = 0
+    for idx, uo in enumerate(uo_list):
+        result_comp = _get_component(uo, "result")
+        qc_data = result_comp.get("qc_checkpoint")
+        if qc_data and isinstance(qc_data, dict) and qc_data.get("measurement"):
+            qc_counter += 1
+            if not qc_data.get("qc_id"):
+                qc_data = dict(qc_data, qc_id=f"QC{qc_counter}")
+            qc_map[idx] = qc_data
+
+    # Build subgraphs
+    subgraph_ids: list[str] = []
+    for i, uo in enumerate(uo_list):
+        uo_id = uo.get("uo_id", f"UO{i}")
+        uo_name = uo.get("instance_label", uo.get("uo_name", ""))
+        uo_type = uo.get("type", "hardware")
+        step_num = i + 1
+        sub_id = f"S{step_num}"
+        safe_name = sanitize_mermaid_label(uo_name)
+
+        lines.append(f'    subgraph {sub_id} ["Step {step_num}: {uo_id} {safe_name}"]')
+        lines.append("        direction LR")
+
+        comp_order = (COMPACT_COMPONENT_ORDER_SW
+                      if uo_type == "software"
+                      else COMPACT_COMPONENT_ORDER_HW)
+
+        has_any = False
+        for ck in comp_order:
+            comp_data = _get_component(uo, ck)
+            item_lines = _extract_component_lines(comp_data)
+            if not item_lines:
+                continue
+            has_any = True
+            prefix = COMPACT_PREFIXES.get(ck, ck.upper())
+            node_id = f"{sub_id}_{ck[:3]}"
+            safe_items = [sanitize_mermaid_label(ln) for ln in item_lines]
+            label = prefix + "\\n" + "\\n".join(safe_items)
+            cls_name = f"comp_{ck}"
+            lines.append(f'        {node_id}["{label}"]:::{cls_name}')
+
+        if not has_any:
+            node_id = f"{sub_id}_main"
+            lines.append(
+                f'        {node_id}["{uo_id}: {safe_name}"]:::comp_equipment'
+            )
+
+        lines.append("    end")
+        container = UO_CONTAINER_STYLES.get(uo_type, UO_CONTAINER_STYLES["hardware"])
+        lines.append(
+            f"    style {sub_id} fill:{container['fill']},"
+            f"stroke:{container['stroke']},stroke-width:2px"
+        )
+        lines.append("")
+        subgraph_ids.append(sub_id)
+
+    # QC diamond nodes
+    qc_node_ids: dict[int, str] = {}
+    for idx, qc_data in sorted(qc_map.items()):
+        qc_id = qc_data["qc_id"]
+        measurement = qc_data.get("measurement", "Quality Check")
+        node_id = sanitize_mermaid_id(qc_id)
+        safe_meas = sanitize_mermaid_label(truncate_text(measurement, MAX_LABEL_LENGTH))
+        lines.append(f'    {node_id}{{{{"{qc_id}: {safe_meas}"}}}}:::qc')
+        qc_node_ids[idx] = node_id
+
+    lines.append("")
+    lines.append("    %% Edges")
+
+    for i in range(len(subgraph_ids)):
+        current = subgraph_ids[i]
+        if i in qc_node_ids:
+            qc_node = qc_node_ids[i]
+            lines.append(f"    {current} --> {qc_node}")
+            if i + 1 < len(subgraph_ids):
+                next_sub = subgraph_ids[i + 1]
+                lines.append(f'    {qc_node} -->|"Pass"| {next_sub}')
+            fail_action = qc_map[i].get("fail_action", "re-check")
+            safe_fail = sanitize_mermaid_label(
+                truncate_text(fail_action, MAX_EDGE_LABEL_LENGTH)
+            )
+            lines.append(f'    {qc_node} -.->|"Fail: {safe_fail}"| {current}')
+        elif i + 1 < len(subgraph_ids):
+            next_sub = subgraph_ids[i + 1]
+            uo_type_cur = uo_list[i].get("type", "hardware")
+            uo_type_nxt = uo_list[i + 1].get("type", "hardware")
+            if uo_type_cur == "software" or uo_type_nxt == "software":
+                lines.append(f"    {current} -.-> {next_sub}")
+            else:
+                lines.append(f"    {current} --> {next_sub}")
+
+    return "\n".join(lines)
+
+
+def generate_mermaid_graph(variant_data: dict, workflow_id: str, variant_id: str,
+                           *, detailed: bool = False) -> str:
+    """Generate Mermaid diagram for a workflow variant.
+
+    Default: compact mode (subgraph-per-UO with horizontal component boxes).
+    With detailed=True: legacy detailed mode (individual component nodes per UO).
+    """
+    if not detailed:
+        return generate_compact_graph(variant_data, workflow_id, variant_id)
+    return generate_detailed_graph(variant_data, workflow_id, variant_id)
+
+
+def generate_detailed_graph(variant_data: dict, workflow_id: str, variant_id: str) -> str:
+    """Generate detailed Mermaid diagram (legacy style).
+
+    Each UO is rendered as a subgraph with individual component nodes
+    (Input, Output, Equipment/Parameters, Consumables/Environment) connected
+    by inter-UO Output→Input edges. Includes a color legend.
     """
     lines = [
         f"%% {workflow_id} {variant_id}: {variant_data.get('name', '')}",
@@ -347,7 +527,7 @@ def generate_variant_comparison(variants: list, workflow_id: str) -> str:
         vname = variant.get("name", "")
         lines.append(f"    subgraph {vid}[\"{vid}: {vname}\"]")
 
-        for j, uo in enumerate(variant.get("uo_sequence", [])):
+        for j, uo in enumerate(_extract_uo_list(variant)):
             uo_id = uo.get("uo_id", f"UO{j}")
             label = uo.get("instance_label", uo.get("uo_name", ""))
             node_id = sanitize_mermaid_id(f"{vid}_{uo_id}_{j}")
@@ -404,17 +584,13 @@ def generate_workflow_context_graph(wf_dir: str | Path, workflow_id: str) -> str
         with open(vf, "r", encoding="utf-8") as f:
             variant_data = json.load(f)
 
-        for uo in variant_data.get("uo_sequence", []):
-            components = uo.get("components", {})
-
-            # Collect inputs
-            input_comp = components.get("input", {})
+        for uo in _extract_uo_list(variant_data):
+            input_comp = _get_component(uo, "input")
             for item in input_comp.get("items", []):
                 if item.get("name"):
                     all_inputs.add(item["name"])
 
-            # Collect outputs
-            output_comp = components.get("output", {})
+            output_comp = _get_component(uo, "output")
             for item in output_comp.get("items", []):
                 if item.get("name"):
                     all_outputs.add(item["name"])
@@ -461,16 +637,14 @@ def save_mermaid(content: str, output_path: str | Path):
     return output_path
 
 
-def generate_all_visualizations(wf_dir: str | Path, workflow_id: str) -> dict:
-    """
-    Generate all Mermaid visualizations for a workflow.
+def generate_all_visualizations(wf_dir: str | Path, workflow_id: str,
+                                *, detailed: bool = False) -> dict:
+    """Generate all Mermaid visualizations for a workflow.
 
-    Reads variant compositions from 04_workflow/ and generates:
-    - Per-variant Mermaid graph files
-    - Variant comparison Mermaid
-    - Workflow context graph Mermaid
-
-    Returns summary of generated files.
+    Args:
+        wf_dir: workflow output directory path
+        workflow_id: e.g., "WB030"
+        detailed: if True, use legacy detailed graph style instead of compact
     """
     wf_dir = Path(wf_dir)
     viz_dir = wf_dir / "05_visualization"
@@ -478,9 +652,9 @@ def generate_all_visualizations(wf_dir: str | Path, workflow_id: str) -> dict:
     workflow_dir = wf_dir / "04_workflow"
 
     generated = []
+    mode_label = "detailed" if detailed else "compact"
 
     print("Loading variant data...")
-    # Load variant files
     variant_files = sorted(workflow_dir.glob("variant_V*.json"))
     variants = []
 
@@ -490,9 +664,9 @@ def generate_all_visualizations(wf_dir: str | Path, workflow_id: str) -> dict:
 
         vid = variant_data.get("variant_id", vf.stem.split("_")[1])
 
-        print(f"Generating Mermaid graph for {vid}...")
-        # Generate Mermaid
-        mmd_content = generate_mermaid_graph(variant_data, workflow_id, vid)
+        print(f"Generating Mermaid graph ({mode_label}) for {vid}...")
+        mmd_content = generate_mermaid_graph(variant_data, workflow_id, vid,
+                                             detailed=detailed)
         mmd_path = save_mermaid(mmd_content, viz_dir / f"workflow_graph_{vid}.mmd")
         generated.append(str(mmd_path))
 
@@ -520,10 +694,15 @@ def generate_all_visualizations(wf_dir: str | Path, workflow_id: str) -> dict:
 
 
 if __name__ == "__main__":
-    import sys
-    if len(sys.argv) < 3:
-        print("Usage: python visualize_workflow.py <workflow_output_dir> <workflow_id>")
-        sys.exit(1)
+    import argparse
+    parser = argparse.ArgumentParser(
+        description="Generate Mermaid visualizations for workflow compositions")
+    parser.add_argument("wf_dir", help="Workflow output directory")
+    parser.add_argument("workflow_id", help="Workflow ID (e.g. WB030)")
+    parser.add_argument("--detailed", action="store_true",
+                        help="Use detailed (legacy) graph style instead of compact")
+    args = parser.parse_args()
 
-    result = generate_all_visualizations(sys.argv[1], sys.argv[2])
+    result = generate_all_visualizations(args.wf_dir, args.workflow_id,
+                                         detailed=args.detailed)
     print(json.dumps(result, indent=2, ensure_ascii=False))

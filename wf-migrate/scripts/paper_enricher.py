@@ -466,9 +466,9 @@ def enrich_paper_list(paper_data: dict | list, rate_delay: float = _REQUEST_DELA
                 continue
 
             # Normalize DOI format (strip URL prefix)
-            normalized = normalize_doi(doi)
-            if normalized != doi:
-                paper["doi"] = normalized
+            normalized_doi = normalize_doi(doi)
+            if normalized_doi != doi:
+                paper["doi"] = normalized_doi
 
             # Validate and attempt correction
             result = validate_and_correct_doi(paper, rate_delay=rate_delay)

@@ -4,7 +4,7 @@ trigger: /wf-output
 description: >
   Generate final output documents, visualizations, and translations for composed workflows.
   Produces reports, JSON data, Mermaid diagrams, and Korean translations.
-version: 2.1.0
+version: 2.2.0
 author: SBLab KRIBB
 tags: [biofoundry, workflow, output, visualization, report]
 ---
