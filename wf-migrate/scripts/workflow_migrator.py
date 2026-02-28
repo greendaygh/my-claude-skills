@@ -2,6 +2,7 @@
 
 import json
 import shutil
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -9,6 +10,11 @@ from case_migrator import migrate_case_card, is_canonical, enrich_case_card, is_
 from metadata_builder import load_paper_list, build_paper_index
 from paper_enricher import enrich_paper_list, save_enriched_paper_list, save_paper_fulltext
 from report_generator import write_reports
+
+
+def _log(msg, verbose=True):
+    if verbose:
+        print(f"  {msg}", file=sys.stderr, flush=True)
 
 
 # Deprecated → standard statistics field name map
@@ -115,7 +121,7 @@ def _backup_cases(wf_dir: Path) -> Path:
     return backup_dir
 
 
-def migrate_workflow(wf_dir: Path, dry_run: bool = False) -> dict:
+def migrate_workflow(wf_dir: Path, dry_run: bool = False, verbose: bool = True) -> dict:
     """Migrate all case cards in a workflow directory.
 
     Steps:
@@ -123,16 +129,18 @@ def migrate_workflow(wf_dir: Path, dry_run: bool = False) -> dict:
     2. Load composition_data.json → extract workflow_id
     3. Backup original cases to _versions/pre_migration/
     4. Migrate each case card in 02_cases/
-    5. Update statistics field names in composition_data.json
-    6. Write migration report to 00_metadata/migration_report.json
+    5. Migrate composition_data.json (statistics + modularity)
+    6. Migrate variant files
+    7. Write migration report to 00_metadata/migration_report.json
 
     Args:
         wf_dir: workflow directory path
         dry_run: if True, compute changes but don't write files
+        verbose: if True (default), print progress to stderr
 
     Returns:
         Migration report dict with: workflow_id, migrated_cases, skipped_cases,
-        total_changes, statistics_changes, timestamp
+        total_changes, composition_data_changes, variant_changes, timestamp
     """
     wf_dir = Path(wf_dir)
 
@@ -156,6 +164,7 @@ def migrate_workflow(wf_dir: Path, dry_run: bool = False) -> dict:
         if comp_path.exists() and not comp_backup.exists():
             backup_dir.mkdir(parents=True, exist_ok=True)
             shutil.copy2(comp_path, comp_backup)
+    _log("[A.1] backup completed", verbose)
 
     # 4. Migrate each case file
     cases_dir = wf_dir / "02_cases"
@@ -187,6 +196,8 @@ def migrate_workflow(wf_dir: Path, dry_run: bool = False) -> dict:
             with open(case_path, "w", encoding="utf-8") as f:
                 json.dump(migrated_dict, f, indent=2)
 
+    _log(f"[A.2] case_cards: {migrated_cases} migrated, {skipped_cases} skipped", verbose)
+
     # 5. Migrate composition_data.json (statistics + modularity)
     comp_changes: list[str] = []
     if comp_data:
@@ -194,6 +205,8 @@ def migrate_workflow(wf_dir: Path, dry_run: bool = False) -> dict:
         if not dry_run and comp_changes:
             with open(comp_path, "w", encoding="utf-8") as f:
                 json.dump(comp_data, f, indent=2, ensure_ascii=False)
+
+    _log(f"[A.3] composition_data: {len(comp_changes)} changes", verbose)
 
     # 6. Migrate variant files
     variant_changes: dict[str, list[str]] = {}
@@ -207,6 +220,9 @@ def migrate_workflow(wf_dir: Path, dry_run: bool = False) -> dict:
                     variant_changes[vf.name] = result["changes"]
         except ImportError:
             pass
+
+    total_variants = len(list(wf_dir_04.glob("variant_V*.json"))) if wf_dir_04.exists() else 0
+    _log(f"[A.4] variants: {len(variant_changes)}/{total_variants} migrated", verbose)
 
     # 7. Build report
     now = datetime.now(timezone.utc).isoformat()
@@ -279,7 +295,8 @@ def _backup_for_enrichment(wf_dir: Path) -> Path:
 
 
 def enrich_workflow(wf_dir: Path, dry_run: bool = False,
-                    case_violation_map: dict[str, bool] | None = None) -> dict:
+                    case_violation_map: dict[str, bool] | None = None,
+                    verbose: bool = True) -> dict:
     """Enrich all case cards in a workflow directory using PubMed data.
 
     Automatically runs Phase A (mechanical migration) first to ensure
@@ -296,6 +313,7 @@ def enrich_workflow(wf_dir: Path, dry_run: bool = False,
         wf_dir: workflow directory path
         dry_run: if True, compute changes but don't write files
         case_violation_map: {filename: True} for cases with pending audit violations
+        verbose: if True (default), print progress to stderr
 
     Returns:
         Enrichment report dict (includes Phase A migration summary).
@@ -305,7 +323,7 @@ def enrich_workflow(wf_dir: Path, dry_run: bool = False,
     case_violation_map = case_violation_map or {}
 
     # Phase A — Mechanical migration first (idempotent: skips canonical cards)
-    migration_report = migrate_workflow(wf_dir, dry_run=dry_run)
+    migration_report = migrate_workflow(wf_dir, dry_run=dry_run, verbose=verbose)
 
     # Load composition_data
     comp_path = wf_dir / "composition_data.json"
@@ -334,6 +352,12 @@ def enrich_workflow(wf_dir: Path, dry_run: bool = False,
         "failed": sum(1 for p in papers if p.get("enrichment_status") == "failed"),
         "full_text_fetched": sum(1 for p in papers if p.get("text_source") in ("pmc_oa", "europepmc")),
     }
+
+    _log(
+        f"[B.1] papers: {paper_enrichment_stats['enriched']}/{paper_enrichment_stats['total']} enriched, "
+        f"{paper_enrichment_stats['full_text_fetched']} full-text",
+        verbose,
+    )
 
     # Backup before writing
     if not dry_run:
@@ -401,6 +425,8 @@ def enrich_workflow(wf_dir: Path, dry_run: bool = False,
             with open(case_path, "w", encoding="utf-8") as f:
                 json.dump(enriched, f, indent=2, ensure_ascii=False)
 
+    _log(f"[B.2] cases: {enriched_cases} enriched, {skipped_cases} skipped", verbose)
+
     # B.4 — Report regeneration
     report_files = {}
     report_error = ""
@@ -409,8 +435,12 @@ def enrich_workflow(wf_dir: Path, dry_run: bool = False,
             report_files = write_reports(wf_dir)
         except Exception as e:
             report_error = str(e)
-            import sys
             print(f"[WARN] Report generation failed for {workflow_id}: {e}", file=sys.stderr, flush=True)
+
+    _log(f"[B.4] reports: {len(report_files)} generated", verbose)
+
+    m = migration_report.get("migrated_cases", 0)
+    _log(f"=> {workflow_id}: migrated={m} enriched={enriched_cases}", verbose)
 
     # Build enrichment report
     report = {

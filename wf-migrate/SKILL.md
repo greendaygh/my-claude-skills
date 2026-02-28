@@ -269,6 +269,44 @@ For each case card:
 4. Boundary I/O
 5. Service Chains
 
+## Progress Monitoring
+
+진행 메시지는 **기본적으로 활성화**되어 있으며 `sys.stderr`로 출력됩니다 (JSON stdout과 분리).
+
+### 출력 예시
+
+```
+Starting migration batch: 20 workflows
+[1/20] WB005 starting...
+  [A.1] backup completed
+  [A.2] case_cards: 2 migrated, 26 skipped
+  [A.3] composition_data: 3 changes
+  [A.4] variants: 5/7 migrated
+  [B.1] papers: 30/35 enriched, 8 full-text
+  [B.2] cases: 28 enriched, 3 skipped
+  [B.4] reports: 4 generated
+  => WB005: migrated=2 enriched=28
+  [A.5] audit-fixes: 14/16 resolved
+  [OK] WB005 (1/20) audit-fixes=14/16
+[2/20] WB010 starting...
+```
+
+### 억제 옵션
+
+```bash
+python migrate_batch.py /path/to/workflows --quiet   # 진행 메시지 억제
+python migrate_batch.py /path/to/workflows -q         # 단축형
+```
+
+### 에이전트 중간 보고 프로토콜
+
+배치 실행 시 에이전트는 5개 워크플로우 단위로 사용자에게 중간 결과를 보고합니다:
+
+1. `migrate_batch.py`를 실행하고 stderr 출력을 모니터링
+2. 5개 워크플로우 완료될 때마다 지금까지의 결과를 사용자에게 요약 보고
+3. 보고 내용: 완료된 워크플로우 수, migrated/enriched/audit-fixed 건수, 에러 발생 여부
+4. 모든 워크플로우 완료 후 최종 요약 보고
+
 ## Workflow with wf-audit
 
 ```

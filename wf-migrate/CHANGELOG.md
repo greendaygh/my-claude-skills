@@ -1,5 +1,22 @@
 # Changelog — wf-migrate
 
+## [2.3.0] — 2026-02-28
+
+### Added
+- **Verbose progress logging** for `migrate_batch.py` and `workflow_migrator.py`
+  - Per-phase progress to stderr: `[A.1]` backup, `[A.2]` case cards, `[A.3]` composition_data, `[A.4]` variants, `[B.1]` papers, `[B.2]` cases, `[B.4]` reports
+  - Batch-level progress: `[1/N] workflow_id starting...`, `[OK]`, `[ERR]`, `[COOLDOWN]`
+  - `[A.5]` audit-fix summary with resolved/total counts
+- `--quiet` / `-q` CLI flag to suppress progress messages
+- `_blog()` and `_log()` helper functions for consistent stderr output
+- **Progress Monitoring** section in SKILL.md with output examples and agent protocol
+
+### Changed
+- `migrate_batch()` accepts `verbose` parameter (default: `True`)
+- `migrate_workflow()` and `enrich_workflow()` accept `verbose` parameter
+- All print statements redirected to stderr (separating progress from JSON stdout)
+- Migration version bumped to `2.3.0`
+
 ## [2.2.0] — 2026-02-28
 
 ### Added

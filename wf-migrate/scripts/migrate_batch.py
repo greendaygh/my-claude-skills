@@ -48,9 +48,15 @@ def find_workflow_dir(base_dir: Path, workflow_id: str) -> Path | None:
     return None
 
 
+def _blog(msg, verbose=True):
+    """Batch-level progress log to stderr."""
+    if verbose:
+        print(msg, file=sys.stderr, flush=True)
+
+
 def migrate_batch(base_dir: Path, targets: list[str] = None,
                   min_priority: str = "low", dry_run: bool = False,
-                  save_report: bool = True) -> dict:
+                  save_report: bool = True, verbose: bool = True) -> dict:
     """Migrate and enrich multiple workflows (Phase A + B).
 
     If targets specified, process those workflow IDs.
@@ -59,6 +65,7 @@ def migrate_batch(base_dir: Path, targets: list[str] = None,
 
     Args:
         save_report: If True (default), save migration_report.json to base_dir.
+        verbose: If True (default), print progress messages to stderr.
     """
     reports = []
 
@@ -68,16 +75,22 @@ def migrate_batch(base_dir: Path, targets: list[str] = None,
         candidates = discover_migration_candidates(base_dir, min_priority)
         workflow_ids = [c["workflow_id"] for c in candidates]
 
+    total = len(workflow_ids)
+    _blog(f"Starting migration batch: {total} workflows", verbose)
+
     for i, wf_id in enumerate(workflow_ids):
         wf_dir = find_workflow_dir(base_dir, wf_id)
         if wf_dir is None:
+            _blog(f"[{i+1}/{total}] {wf_id} — directory not found, skipping", verbose)
             continue
+
+        _blog(f"[{i+1}/{total}] {wf_id} starting...", verbose)
 
         # Cooldown between workflows to avoid API burst
         if i > 0:
             time.sleep(5)
         if i > 0 and i % 10 == 0:
-            print(f"  [COOLDOWN] Pausing 30s after {i} workflows...", flush=True)
+            _blog(f"  [COOLDOWN] Pausing 30s after {i} workflows...", verbose)
             time.sleep(30)
 
         try:
@@ -97,7 +110,8 @@ def migrate_batch(base_dir: Path, targets: list[str] = None,
 
             # Phase A + B (mechanical migration + enrichment)
             report = enrich_workflow(wf_dir, dry_run=dry_run,
-                                     case_violation_map=case_violations)
+                                     case_violation_map=case_violations,
+                                     verbose=verbose)
 
             # Phase A.5: audit-driven targeted fixes on remaining violations
             fix_results = []
@@ -112,6 +126,10 @@ def migrate_batch(base_dir: Path, targets: list[str] = None,
                         "skipped": sum(1 for f in fix_results if f.get("fix_status") == "skipped"),
                     }
 
+            if fix_results:
+                resolved = sum(1 for f in fix_results if f.get("fix_status") == "resolved")
+                _blog(f"  [A.5] audit-fixes: {resolved}/{len(fix_results)} resolved", verbose)
+
             # Update audit_report.json with fix_status
             if not dry_run and (fix_results or pending):
                 update_audit_report(wf_dir, fix_results, pre_score=pre_score)
@@ -120,10 +138,10 @@ def migrate_batch(base_dir: Path, targets: list[str] = None,
             fix_summary = ""
             if fix_results:
                 resolved = sum(1 for f in fix_results if f.get("fix_status") == "resolved")
-                fix_summary = f" audit-fixes: {resolved}/{len(fix_results)}"
-            print(f"  [OK] {wf_id} ({i+1}/{len(workflow_ids)}){fix_summary}", flush=True)
+                fix_summary = f" audit-fixes={resolved}/{len(fix_results)}"
+            _blog(f"  [OK] {wf_id} ({i+1}/{total}){fix_summary}", verbose)
         except Exception as e:
-            print(f"  [ERR] {wf_id}: {e}", flush=True)
+            _blog(f"  [ERR] {wf_id}: {e}", verbose)
             reports.append({
                 "workflow_id": wf_id,
                 "enriched_cases": 0,
@@ -139,7 +157,9 @@ def migrate_batch(base_dir: Path, targets: list[str] = None,
         report_path = base_dir / "migration_report.json"
         with open(report_path, "w") as f:
             json.dump(result, f, indent=2)
-        print(f"  [SAVED] {report_path}", flush=True)
+        _blog(f"[SAVED] {report_path}", verbose)
+
+    _blog(f"Batch complete: {total} workflows processed", verbose)
 
     return result
 
@@ -186,17 +206,23 @@ def main(args=None):
     parser.add_argument("--priority", default="low", choices=_PRIORITY_LEVELS[:-1],
                         help="Minimum priority to process (default: low)")
     parser.add_argument("--dry-run", action="store_true", help="Preview changes without writing")
+    parser.add_argument("--quiet", "-q", action="store_true",
+                        help="Suppress progress messages (default: verbose)")
     parsed = parser.parse_args(args)
+
+    verbose = not parsed.quiet
 
     result = migrate_batch(parsed.base_dir, targets=parsed.targets,
                            min_priority=parsed.priority, dry_run=parsed.dry_run,
-                           save_report=True)
+                           save_report=True, verbose=verbose)
 
     prefix = "[DRY RUN] " if parsed.dry_run else ""
     enriched = result.get("total_cases_enriched", 0)
     skipped = result.get("total_cases_skipped", 0)
-    print(f"{prefix}Processed {result['total_workflows']} workflows (Phase A + B)")
-    print(f"Cases enriched: {enriched}, skipped: {skipped}")
+    print(f"{prefix}Processed {result['total_workflows']} workflows (Phase A + B)",
+          file=sys.stderr, flush=True)
+    print(f"Cases enriched: {enriched}, skipped: {skipped}",
+          file=sys.stderr, flush=True)
     return result
 
 
