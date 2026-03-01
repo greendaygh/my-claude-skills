@@ -1,0 +1,6 @@
+requests
+lxml
+networkx
+pydantic>=2.0
+pytest
+pytest-mock

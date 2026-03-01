@@ -1,0 +1,133 @@
+{
+  "project": "prophage-miner",
+  "description": "Prophage 연구 문헌에서 추출한 엔티티 및 관계를 위한 도메인 스키마",
+  "version": "v1.0",
+  "entity_types": [
+    {
+      "label": "Prophage",
+      "primary_key": "name",
+      "properties": ["host_organism", "genome_size_kb", "integration_site", "completeness", "induction_condition"],
+      "description": "박테리아 게놈에 통합된 파지 게놈. completeness: intact/questionable/incomplete."
+    },
+    {
+      "label": "Gene",
+      "primary_key": "name",
+      "properties": ["symbol", "category", "function", "sequence_id"],
+      "description": "Prophage 유전자. category: structural/regulatory/lysis/integration/replication."
+    },
+    {
+      "label": "Protein",
+      "primary_key": "name",
+      "properties": ["uniprot_id", "function", "structure_pdb", "domain"],
+      "description": "Prophage 단백질. UniProt ID가 있으면 포함."
+    },
+    {
+      "label": "Host",
+      "primary_key": "species",
+      "properties": ["strain", "genome_accession", "taxonomy_id", "pathogenicity"],
+      "description": "Prophage 숙주 박테리아. NCBI Taxonomy 기준."
+    },
+    {
+      "label": "IntegrationSite",
+      "primary_key": "locus",
+      "properties": ["tRNA_gene", "att_sequence_attB", "att_sequence_attP", "chromosome_position"],
+      "description": "Prophage가 박테리아 게놈에 통합되는 부위."
+    },
+    {
+      "label": "Receptor",
+      "primary_key": "name",
+      "properties": ["type", "host_surface_location"],
+      "description": "파지가 인식하는 숙주 표면 수용체. type: LPS/OmpC/FhuA 등."
+    },
+    {
+      "label": "InductionCondition",
+      "primary_key": "trigger",
+      "properties": ["mechanism", "efficiency"],
+      "description": "Prophage 유도 조건. trigger: SOS/UV/mitomycin_C/antibiotic/temperature."
+    },
+    {
+      "label": "Paper",
+      "primary_key": "doi",
+      "properties": ["pmid", "pmcid", "title", "authors", "year", "journal"],
+      "description": "출처 논문. Provenance 추적용."
+    }
+  ],
+  "relationship_types": [
+    {
+      "type": "ENCODES",
+      "from_label": "Prophage",
+      "to_label": "Gene",
+      "properties": ["position_in_genome", "essential"],
+      "description": "Prophage가 유전자를 암호화"
+    },
+    {
+      "type": "TRANSLATES_TO",
+      "from_label": "Gene",
+      "to_label": "Protein",
+      "properties": ["product_type"],
+      "description": "유전자에서 단백질로 번역"
+    },
+    {
+      "type": "INTEGRATES_INTO",
+      "from_label": "Prophage",
+      "to_label": "Host",
+      "properties": ["integration_site", "mechanism"],
+      "description": "Prophage가 숙주 게놈에 통합. mechanism: site-specific/random."
+    },
+    {
+      "type": "INFECTS",
+      "from_label": "Prophage",
+      "to_label": "Host",
+      "properties": ["receptor_used", "infection_efficiency"],
+      "description": "Prophage(파지)가 숙주를 감염"
+    },
+    {
+      "type": "BINDS",
+      "from_label": "Protein",
+      "to_label": "Receptor",
+      "properties": ["affinity", "specificity"],
+      "description": "단백질(RBP)이 숙주 수용체에 결합"
+    },
+    {
+      "type": "REPRESSES",
+      "from_label": "Protein",
+      "to_label": "Gene",
+      "properties": ["repression_type", "binding_site"],
+      "description": "억제자 단백질이 유전자를 억제. repression_type: CI/Cro."
+    },
+    {
+      "type": "INDUCES",
+      "from_label": "InductionCondition",
+      "to_label": "Prophage",
+      "properties": ["induction_rate", "conditions"],
+      "description": "특정 조건이 prophage 유도를 촉발"
+    },
+    {
+      "type": "HOMOLOGOUS_TO",
+      "from_label": "Gene",
+      "to_label": "Gene",
+      "properties": ["identity_percent", "alignment_coverage"],
+      "description": "유전자 간 상동성 관계"
+    },
+    {
+      "type": "LYSIS_COMPONENT",
+      "from_label": "Protein",
+      "to_label": "Prophage",
+      "properties": ["role", "timing"],
+      "description": "용균 카세트 구성 단백질. role: holin/endolysin/spanin."
+    },
+    {
+      "type": "EXTRACTED_FROM",
+      "from_label": "*",
+      "to_label": "Paper",
+      "properties": ["confidence", "source_section", "evidence_text"],
+      "description": "엔티티/관계의 출처 논문 추적 (provenance)"
+    }
+  ],
+  "provenance": {
+    "paper_label": "Paper",
+    "paper_properties": ["doi", "pmid", "pmcid", "title", "authors", "year", "journal"],
+    "extraction_rel": "EXTRACTED_FROM",
+    "extraction_properties": ["confidence", "source_section", "evidence_text", "extraction_date"]
+  }
+}

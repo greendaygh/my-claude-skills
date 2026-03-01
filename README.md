@@ -3,7 +3,7 @@
 SBLab KRIBB의 Claude Code 커스텀 스킬 모음.
 바이오파운드리 워크플로 구성, 과학 문헌 분석, 스킬 자동 생성 등을 지원합니다.
 
-**Version**: 1.8.0
+**Version**: 1.9.0
 
 ---
 
@@ -37,6 +37,7 @@ workflow-composer (Orchestrator v2.4)
 | **rna-seq-analysis** | Bulk RNA-seq 분석 파이프라인 (pydeseq2, scanpy 기반) |
 | **mutation-kinetics-miner** | 논문에서 단백질 변이-동역학 관계 자동 추출 |
 | **literature-knowledge-graph** | 문헌 기반 지식 그래프 구축 |
+| **prophage-miner** | PubMed 논문 자동 검색, PMC full text 추출, 3인 전문가 패널 합의, knowledge graph 구축 |
 | **debate** | 낙관주의자 vs 비관주의자 에이전트 토론 (한국어) |
 
 ### Meta Skills
@@ -133,6 +134,12 @@ my-claude-skills/
 │   ├── SKILL.md
 │   ├── CHANGELOG.md
 │   └── scripts/          # workflow_migrator.py, case_migrator.py, audit_fixer.py, variant_migrator.py
+├── prophage-miner/          # Prophage Literature Mining & Knowledge Graph
+│   ├── SKILL.md
+│   ├── CHANGELOG.md
+│   ├── scripts/          # search_papers.py, fetch_fulltext.py, build_graph.py, generate_report.py
+│   ├── assets/           # prophage_schema.json, panel_config.json
+│   └── references/       # extraction_prompts.md, prophage_biology.md, panel_protocol.md
 ├── rna-seq-analysis/
 ├── mutation-kinetics-miner/
 ├── literature-knowledge-graph/

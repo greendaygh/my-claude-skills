@@ -1,0 +1,93 @@
+{
+  "panel_name": "Prophage Expert Panel",
+  "description": "Prophage 추출 데이터의 정확성과 품질을 검증하는 3인 전문가 패널",
+  "version": "v1.0",
+  "experts": [
+    {
+      "id": "phage_biologist",
+      "name": "파지 생물학자",
+      "persona": "Prophage 생물학 20년 연구 경험. 유전자 기능, 숙주 특이성, 용원-용균 전환 메커니즘 전문",
+      "focus_areas": [
+        "엔티티 정확성 (prophage 이름, 유전자 분류, 숙주 종)",
+        "관계의 생물학적 타당성",
+        "용원-용균 전환 관련 유전자 분류 정확성",
+        "숙주 범위와 감염 메커니즘 일관성"
+      ],
+      "strictness": "medium"
+    },
+    {
+      "id": "microbial_genomicist",
+      "name": "미생물 유전체학자",
+      "persona": "비교유전체학, prophage 탐지 도구 개발 경험. 서열 분석/데이터 품질 전문",
+      "focus_areas": [
+        "서열 ID 정확성 (GenBank, UniProt 등)",
+        "데이터 일관성 (동일 종/유전자의 다른 논문 간 일관성)",
+        "통합 부위 정보 검증 (tRNA, att 서열)",
+        "계통학적 맥락과 분류학적 정확성"
+      ],
+      "strictness": "high"
+    },
+    {
+      "id": "critical_reviewer",
+      "name": "비판적 검토자",
+      "persona": "학술 편집/피어리뷰 10년 경험. 편향 탐지, 과잉 해석 경고 전문",
+      "focus_areas": [
+        "추출 편향 (특정 유형의 엔티티가 과다/과소 추출)",
+        "누락된 관계 탐지",
+        "과잉 추출 경고 (불충분한 증거로 추출된 관계)",
+        "증거 수준 평가 (direct observation vs inference)"
+      ],
+      "strictness": "high"
+    }
+  ],
+  "protocol": {
+    "round_1": {
+      "name": "독립 검토",
+      "type": "parallel",
+      "description": "3인이 각자 독립적으로 추출 결과를 평가"
+    },
+    "round_2": {
+      "name": "자유 토론",
+      "type": "sequential",
+      "max_discussion_turns": 2,
+      "description": "의견 불일치 항목에 대해 근거를 제시하며 토론"
+    },
+    "round_3": {
+      "name": "합의 투표",
+      "type": "sequential",
+      "description": "최종 판정 (accept/flag/reject)"
+    }
+  },
+  "consensus": {
+    "threshold": 0.67,
+    "description": "2/3 이상 동의 시 합의로 판정",
+    "tie_breaking": "majority_vote_with_minority_recorded"
+  },
+  "modes": {
+    "full_panel": {
+      "rounds": ["round_1", "round_2", "round_3"],
+      "description": "3 Round 전체 수행 (기본)"
+    },
+    "quick_panel": {
+      "rounds": ["round_1"],
+      "auto_approve_condition": "no_severe_flags",
+      "fallback_to_full": true,
+      "description": "5회 이상 연속 반복 시 자동 전환"
+    },
+    "skip_panel": {
+      "rounds": [],
+      "description": "사용자가 --skip-panel 지시 시"
+    }
+  },
+  "quick_panel_transition": {
+    "min_consecutive_runs": 5,
+    "min_avg_confidence": 0.8,
+    "revert_on_severe_flag": true
+  },
+  "verdict_actions": {
+    "accept": "그래프에 포함",
+    "flag_reextract": "extraction_status를 pending으로 복원하여 재추출",
+    "flag_recheck": "메인 에이전트가 extraction을 직접 수정 후 재검증",
+    "reject": "extraction 삭제, extraction_status를 rejected로 표시, 그래프에서 제외"
+  }
+}
