@@ -367,10 +367,9 @@ def enrich_workflow(wf_dir: Path, dry_run: bool = False,
     if not dry_run:
         for p in papers:
             pending_text = p.pop("_full_text_pending", "")
-            text = pending_text or p.get("abstract", "")
             pid = p.get("paper_id", p.get("id", ""))
-            if text and pid:
-                save_paper_fulltext(wf_dir, pid, text)
+            if pending_text and pid:
+                save_paper_fulltext(wf_dir, pid, pending_text)
             p.pop("full_text", None)
         save_enriched_paper_list(wf_dir, enriched_papers)
 

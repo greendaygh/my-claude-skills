@@ -74,10 +74,20 @@ Do NOT use alternative names like "Executive Summary", "Scope and Objectives", "
 
 Within "Variants", each variant is a `### V{n}: {name}` subsection containing a UO Sequence table with columns: Step, UO ID, UO Name, Instance Label, Type, Key Equipment/Software, Key Parameters. Each variant subsection ends with QC Checkpoints.
 
-### 5.2 Validation (GATE) — Report Section Verification
+### 5.2 Visualization — Invoke `scientific-skills:scientific-visualization`
 
-**CRITICAL: `validate_report_sections()` must pass before Korean translation proceeds.**
-If missing sections are detected, supplement the report and re-validate.
+Per `references/visualization-guide.md`:
+- UO workflow graphs (Mermaid): HW=blue, SW=green, QC=amber
+- Variant comparison graph
+- Workflow context graph (upstream/downstream connections)
+
+Save to `05_visualization/`.
+
+### 5.3 Full Validation Gate 4 — MANDATORY (3 Steps)
+
+**CRITICAL: ALL 3 steps must pass before Korean translation proceeds.**
+
+**Step A: Existing Validation Scripts**
 
 Run `wf-output/scripts/validate.py`:
 - All 13 report sections present in `composition_report.md`
@@ -88,22 +98,77 @@ Run `wf-output/scripts/validate.py`:
 
 Also run `workflow-composer/scripts/validate_workflow.py` for cross-skill validation.
 
-Save validation report to `00_metadata/validation_report.json`.
+**Step B: Full Pydantic Audit**
 
-### 5.3 Korean Translation — Delegate to OMC `writer` agent
+```python
+# Run wf-audit full audit on all 13 file types
+from wf_audit.scripts.audit_workflow import audit_single_workflow
+result = audit_single_workflow(wf_dir, verbose=True)
+# Includes: Pydantic model validation + referential integrity + content quality
+```
+
+**Pass**: conformance >= 0.7.
+
+**Step C: Visualization Structure Validation (per `references/visualization-guide.md` Detailed mode)**
+
+Validate `05_visualization/` files against 8 criteria (text parsing, not Pydantic):
+
+1. **File completeness**:
+   - variant count == `workflow_graph_V*.mmd` count
+   - `variant_comparison.mmd` exists
+   - `workflow_context.mmd` exists
+
+2. **classDef color scheme** (6 required classes):
+   - `comp_input`: fill:#A8D8EA,stroke:#5B9BD5
+   - `comp_output`: fill:#FFD3B6,stroke:#E88D4F
+   - `comp_equipment`: fill:#D5A6E6,stroke:#8E44AD
+   - `comp_consumables`: fill:#B5EAD7,stroke:#3D9970
+   - `comp_material_and_method`: fill:#FFEAA7,stroke:#FDCB6E (compact mode)
+   - `qc`: fill:#F0AD4E,stroke:#D48A1A,color:white
+
+3. **UO subgraph structure**:
+   - `graph TD` declaration (top-to-bottom overall flow)
+   - Each UO = subgraph (node ID: `{uo_id}_{index}_sub`)
+   - Component nodes: `{uo_id}_{index}_{3letter}` (inp, out, equ, con)
+   - Component labels: "IN:", "OUT:", "EQUIP:", "CONS:" prefixes
+   - HW subgraph: `fill:#EBF2FA,stroke:#2C5F8A`; SW subgraph: `fill:#EBF8EB,stroke:#3D7A3D`
+
+4. **Output-to-Input edges** (data flow):
+   - Previous UO `_out` node → next UO `_inp` node
+   - HW→HW: solid arrow (`-->`); SW involved: dashed (`-.->`)
+   - Edge label: first output item name
+
+5. **QC diamond nodes**:
+   - `{{ }}` shape (outside UO subgraphs, placed between UO steps)
+   - `:::qc` class applied
+   - Each `qc_checkpoints` entry has a corresponding QC node
+   - Pass: solid arrow → next UO; Fail: dashed + `"Fail: {action}"` label → previous UO
+
+6. **Color Legend** (Detailed mode required):
+   - Legend subgraph at bottom with Input, Output, Equipment/Parameters, Consumables/Environment, QC (5 items)
+   - Legend style: `fill:#F9F9F9,stroke:#CCCCCC`
+
+7. **UO ID consistency**:
+   - Subgraph title UO IDs match `variant_V*.json` uo_id values
+   - Also match `uo_mapping.json` primary_uo values
+
+8. **Mermaid syntax integrity**:
+   - `subgraph`/`end` pairs balanced
+   - Node IDs are valid Mermaid identifiers (alphanumeric + underscore)
+   - Edge labels in quotes
+
+Save results to:
+- `00_metadata/validation_report.json` (Step A)
+- `00_metadata/audit_report.json` (Step B)
+- `00_metadata/visualization_validation.json` (Step C)
+
+If missing sections or validation failures detected, fix and re-validate (max 2 retries).
+
+### 5.4 Korean Translation — Delegate to OMC `writer` agent
 
 Launch Task agent (subagent_type: `oh-my-claudecode:writer`) to translate:
 - `composition_report.md` → `composition_report_ko.md`
 - `composition_workflow.md` → `composition_workflow_ko.md`
-
-### 5.4 Visualization — Invoke `scientific-skills:scientific-visualization`
-
-Per `references/visualization-guide.md`:
-- UO workflow graphs (Mermaid): HW=blue, SW=green, QC=amber
-- Variant comparison graph
-- Workflow context graph (upstream/downstream connections)
-
-Save to `05_visualization/`.
 
 ### 5.5 Update Index — Update `index.json` global workflow index
 
@@ -111,16 +176,18 @@ Save to `05_visualization/`.
 
 | Skill | Purpose | Step |
 |-------|---------|------|
-| `scientific-skills:scientific-visualization` | Publication-quality graphs | 5.3 |
+| `scientific-skills:scientific-visualization` | Publication-quality graphs | 5.2 |
 | `scientific-skills:scientific-writing` | Report generation support | 5.1 |
-| `oh-my-claudecode:writer` | Korean translation | 5.2 |
+| `oh-my-claudecode:writer` | Korean translation | 5.4 |
 
 ## Output Contract
 
 ```
 {wf_dir}/
 ├── 00_metadata/
-│   └── validation_report.json
+│   ├── validation_report.json
+│   ├── audit_report.json
+│   └── visualization_validation.json
 ├── 05_visualization/
 │   ├── workflow_graph_V*.mmd
 │   ├── variant_comparison.mmd

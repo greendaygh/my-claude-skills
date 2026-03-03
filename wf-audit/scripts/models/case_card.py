@@ -67,7 +67,7 @@ class CaseMetadata(BaseModel):
 class Completeness(BaseModel):
     model_config = ALLOW_EXTRA
 
-    score: float | int | str
+    score: Optional[float | int | str] = None
     details: Optional[Any] = None
     notes: Optional[str] = None
 
@@ -75,7 +75,7 @@ class Completeness(BaseModel):
 class WorkflowContextRef(BaseModel):
     model_config = ALLOW_EXTRA
 
-    workflow_id: str
+    workflow_id: Optional[str] = None
     boundary_inputs: Optional[list[str]] = None
     boundary_outputs: Optional[list[str]] = None
 

@@ -278,21 +278,99 @@ def search_pmid_by_title(title: str) -> str:
 # PMC full text retrieval
 # ---------------------------------------------------------------------------
 
-_MAX_FULLTEXT_CHARS = 200_000  # ~50k words; cap to protect memory
+_MAX_FULLTEXT_CHARS = 300_000
+
+_SECTION_MAP = {
+    "intro": "INTRODUCTION",
+    "introduction": "INTRODUCTION",
+    "background": "INTRODUCTION",
+    "methods": "METHODS",
+    "materials": "METHODS",
+    "materials and methods": "METHODS",
+    "materials|methods": "METHODS",
+    "experimental": "METHODS",
+    "experimental procedures": "METHODS",
+    "experimental section": "METHODS",
+    "results": "RESULTS",
+    "results and discussion": "RESULTS",
+    "discussion": "DISCUSSION",
+    "conclusions": "DISCUSSION",
+    "conclusion": "DISCUSSION",
+}
+
+_ORDERED_SECTIONS = ["ABSTRACT", "INTRODUCTION", "METHODS", "RESULTS", "DISCUSSION"]
+
+
+def _xml_element_to_text(element: ET.Element) -> str:
+    """Recursively extract plain text from an XML element."""
+    return " ".join(element.itertext()).strip()
+
+
+def _parse_pmc_sections(root: ET.Element) -> dict[str, str]:
+    """Parse PMC XML into section-name -> text mapping (all sections)."""
+    sections: dict[str, str] = {}
+
+    abstract_el = root.find(".//abstract")
+    if abstract_el is not None:
+        text = _xml_element_to_text(abstract_el)
+        if text.strip():
+            sections["ABSTRACT"] = text.strip()
+
+    for sec in root.findall(".//body/sec"):
+        sec_type = (sec.get("sec-type") or "").lower()
+        title_el = sec.find("title")
+        title_text = (title_el.text or "").lower() if title_el is not None else ""
+
+        section_name = None
+        for key, name in _SECTION_MAP.items():
+            if key in sec_type or key in title_text:
+                section_name = name
+                break
+
+        if section_name is None:
+            if title_el is not None and title_el.text:
+                section_name = title_el.text.strip().upper()
+            else:
+                continue
+
+        text = _xml_element_to_text(sec)
+        if text.strip():
+            if section_name in sections:
+                sections[section_name] += "\n" + text.strip()
+            else:
+                sections[section_name] = text.strip()
+
+    return sections
+
+
+def _sections_to_structured_text(sections: dict[str, str]) -> str:
+    """Convert section dict to structured text with === SECTION === headers."""
+    lines: list[str] = []
+    for key in _ORDERED_SECTIONS:
+        if key in sections:
+            lines.append(f"=== {key} ===")
+            lines.append(sections[key][:_MAX_FULLTEXT_CHARS])
+            lines.append("")
+    for key in sorted(sections.keys()):
+        if key not in _ORDERED_SECTIONS:
+            lines.append(f"=== {key} ===")
+            lines.append(sections[key][:_MAX_FULLTEXT_CHARS])
+            lines.append("")
+    return "\n".join(lines)
 
 
 def fetch_pmc_fulltext(pmcid: str) -> str | None:
     """Fetch full text from PMC Open Access via efetch API.
 
-    Prioritizes Methods/Materials and Methods sections.
-    Falls back to full <body> text.
+    Extracts ALL sections (Abstract, Introduction, Methods, Results, Discussion)
+    as structured text with === SECTION === headers.
+    Falls back to full <body> text if section parsing yields nothing.
 
-    Returns plain text or None on failure.
+    Returns structured plain text or None on failure.
     """
     if not pmcid:
         return None
 
-    # Strip "PMC" prefix for efetch if present
     numeric_id = pmcid.replace("PMC", "")
     url = (f"{_NCBI_EUTILS_BASE}/efetch.fcgi?"
            f"db=pmc&id={numeric_id}&rettype=xml&retmode=xml")
@@ -305,15 +383,10 @@ def fetch_pmc_fulltext(pmcid: str) -> str | None:
     except ET.ParseError:
         return None
 
-    # Try to extract Methods section first
-    methods_text = _extract_sections_from_pmc_xml(root, [
-        "methods", "materials and methods", "materials & methods",
-        "experimental", "experimental procedures", "experimental section",
-    ])
-    if methods_text and len(methods_text) > 200:
-        return methods_text[:_MAX_FULLTEXT_CHARS]
+    sections = _parse_pmc_sections(root)
+    if sections:
+        return _sections_to_structured_text(sections)
 
-    # Fallback: extract full body text
     body = root.find(".//body")
     if body is not None:
         text = _xml_element_to_text(body)
@@ -323,45 +396,19 @@ def fetch_pmc_fulltext(pmcid: str) -> str | None:
     return None
 
 
-def _extract_sections_from_pmc_xml(root: ET.Element, section_titles: list[str]) -> str:
-    """Extract specific sections from PMC XML by sec-type or title match."""
-    parts = []
-
-    for sec in root.iter("sec"):
-        # Check sec-type attribute
-        sec_type = (sec.get("sec-type") or "").lower()
-        if sec_type in section_titles:
-            parts.append(_xml_element_to_text(sec))
-            continue
-
-        # Check <title> element text
-        title_el = sec.find("title")
-        if title_el is not None and title_el.text:
-            title_text = title_el.text.strip().lower()
-            if any(st in title_text for st in section_titles):
-                parts.append(_xml_element_to_text(sec))
-
-    return "\n\n".join(parts)
-
-
-def _xml_element_to_text(element: ET.Element) -> str:
-    """Recursively extract plain text from an XML element."""
-    return " ".join(element.itertext()).strip()
-
-
 def fetch_europepmc_fulltext(pmcid: str) -> str | None:
     """Fetch full text from Europe PMC REST API (fallback for PMC OA).
 
     Limited to _EUROPEPMC_BATCH_LIMIT calls per run to comply with
     Europe PMC's policy against bulk automated downloads.
 
-    Returns plain text or None on failure.
+    Returns structured plain text or None on failure.
     """
     global _europepmc_batch_count
     if not pmcid:
         return None
     if _europepmc_batch_count >= _EUROPEPMC_BATCH_LIMIT:
-        return None  # batch limit reached
+        return None
     _europepmc_batch_count += 1
 
     url = f"https://www.ebi.ac.uk/europepmc/webservices/rest/{pmcid}/fullTextXML"
@@ -374,15 +421,10 @@ def fetch_europepmc_fulltext(pmcid: str) -> str | None:
     except ET.ParseError:
         return None
 
-    # Try Methods first
-    methods_text = _extract_sections_from_pmc_xml(root, [
-        "methods", "materials and methods", "materials & methods",
-        "experimental", "experimental procedures",
-    ])
-    if methods_text and len(methods_text) > 200:
-        return methods_text[:_MAX_FULLTEXT_CHARS]
+    sections = _parse_pmc_sections(root)
+    if sections:
+        return _sections_to_structured_text(sections)
 
-    # Fallback: full body
     body = root.find(".//body")
     if body is not None:
         text = _xml_element_to_text(body)
@@ -390,6 +432,44 @@ def fetch_europepmc_fulltext(pmcid: str) -> str | None:
             return text[:_MAX_FULLTEXT_CHARS]
 
     return None
+
+
+def validate_pmid_title_match(pmid: str, expected_title: str) -> bool:
+    """Cross-validate PMID by comparing PubMed title with expected title.
+
+    Returns True if titles match (cosine similarity >= 0.3), False otherwise.
+    """
+    if not pmid:
+        return True  # no PMID to validate
+    if not expected_title:
+        return False  # cannot verify without title — reject merge to be safe
+    details = fetch_pubmed_details(pmid)
+    if not details or "title" not in details:
+        return True  # can't validate, assume ok
+    pubmed_title = details["title"]
+
+    import math
+    from collections import Counter
+
+    def _tok(t: str) -> list[str]:
+        stops = {"a","an","the","and","or","in","on","at","to","for","of","with","by","from","is","are","was","were"}
+        return [w for w in re.findall(r"[a-z0-9]+", t.lower()) if w not in stops and len(w) > 2]
+
+    ta, tb = _tok(expected_title), _tok(pubmed_title)
+    if not ta or not tb:
+        return True
+    ca, cb = Counter(ta), Counter(tb)
+    keys = set(ca) | set(cb)
+    dot = sum(ca.get(k,0) * cb.get(k,0) for k in keys)
+    ma = math.sqrt(sum(v*v for v in ca.values()))
+    mb = math.sqrt(sum(v*v for v in cb.values()))
+    sim = dot / (ma * mb) if ma and mb else 0.0
+    if sim < 0.3:
+        print(f"  [WARN] PMID {pmid} title mismatch (sim={sim:.3f}): "
+              f"expected='{expected_title[:60]}' vs pubmed='{pubmed_title[:60]}'",
+              file=sys.stderr, flush=True)
+        return False
+    return True
 
 
 # ---------------------------------------------------------------------------
@@ -442,9 +522,15 @@ def enrich_paper_list(paper_data: dict | list, rate_delay: float = _REQUEST_DELA
         if not pmid and doi:
             id_result = resolve_pmid_from_doi(doi)
             pmid = id_result.get("pmid", "")
+            if pmid and title:
+                if not validate_pmid_title_match(pmid, title):
+                    paper["pmid_title_mismatch"] = True
+                    print(f"  [REJECT-PMID] {paper.get('paper_id', '?')}: "
+                          f"DOI→PMID {pmid} title mismatch, discarding resolved PMID",
+                          file=sys.stderr, flush=True)
+                    pmid = ""
             if pmid:
                 paper["pmid"] = pmid
-            # "not found" is normal — not an API failure
             if not pmcid and id_result.get("pmcid"):
                 pmcid = id_result["pmcid"]
                 paper["pmcid"] = pmcid
@@ -454,8 +540,13 @@ def enrich_paper_list(paper_data: dict | list, rate_delay: float = _REQUEST_DELA
         if not pmid and title:
             pmid = search_pmid_by_title(title)
             if pmid:
-                paper["pmid"] = pmid
-            # "not found" is normal — not an API failure
+                if not validate_pmid_title_match(pmid, title):
+                    print(f"  [REJECT-PMID] {paper.get('paper_id', '?')}: "
+                          f"title-search PMID {pmid} mismatch, discarding",
+                          file=sys.stderr, flush=True)
+                    pmid = ""
+                else:
+                    paper["pmid"] = pmid
             time.sleep(adaptive_delay)
 
         # Step 3: Fetch PubMed details
@@ -464,6 +555,16 @@ def enrich_paper_list(paper_data: dict | list, rate_delay: float = _REQUEST_DELA
             time.sleep(adaptive_delay)
 
             if details:
+                # Step 3.1: Cross-validate PMID → title before merging
+                if title and details.get("title"):
+                    if not validate_pmid_title_match(pmid, title):
+                        paper["pmid_title_mismatch"] = True
+                        print(f"  [SKIP-MERGE] {paper.get('paper_id', '?')}: "
+                              f"PMID {pmid} title mismatch, skipping metadata merge",
+                              file=sys.stderr, flush=True)
+                        paper["enrichment_status"] = "partial"
+                        continue
+
                 # Merge: only fill in missing/empty fields
                 for key, value in details.items():
                     existing = paper.get(key)
@@ -472,7 +573,6 @@ def enrich_paper_list(paper_data: dict | list, rate_delay: float = _REQUEST_DELA
 
                 paper["enrichment_status"] = "enriched"
             else:
-                # Had PMID but got no details → likely API issue
                 paper["enrichment_status"] = "partial"
                 api_failure = True
         else:

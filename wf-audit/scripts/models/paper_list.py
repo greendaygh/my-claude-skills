@@ -3,6 +3,10 @@
 Canonical key mappings:
   - id → paper_id
   - authors (array) → authors (string, join with ", ")
+
+Lenient canonical: accepts both canonical and legacy formats.
+  - authors: str (canonical) or list[str] (legacy)
+  - workflow_id / total_papers: optional for legacy compatibility
 """
 
 from typing import Optional
@@ -18,7 +22,7 @@ class Paper(BaseModel):
     paper_id: str
     doi: str
     title: str
-    authors: str
+    authors: str | list[str] = ""
     year: int
     journal: str
     pmid: Optional[str] = None
@@ -38,7 +42,7 @@ class Paper(BaseModel):
 class PaperList(BaseModel):
     model_config = ALLOW_EXTRA
 
-    workflow_id: str
-    total_papers: int
+    workflow_id: Optional[str] = None
+    total_papers: Optional[int] = None
     search_date: Optional[str] = None
     papers: list[Paper]

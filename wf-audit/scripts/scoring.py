@@ -116,7 +116,8 @@ def score_case_card(case_data: dict, source_file: str = "") -> ScoredResult:
 def _check_paper_content_quality(
     paper_data: dict, source_file: str,
 ) -> list[DetailedViolation]:
-    """Detect data quality issues beyond schema: full_text, duplicate DOIs."""
+    """Detect data quality issues beyond schema: full_text inline, duplicate DOIs,
+    abstract-title mismatches."""
     violations: list[DetailedViolation] = []
     papers = paper_data.get("papers", [])
     if not isinstance(papers, list):
@@ -155,6 +156,47 @@ def _check_paper_content_quality(
                 error_type="duplicate",
                 fix_hint=f"중복 논문을 제거하세요: {', '.join(pids[1:])}",
             ))
+
+    # Abstract-title keyword similarity check
+    import math
+    from collections import Counter
+
+    _stop = {"a","an","the","and","or","but","in","on","at","to","for","of",
+             "with","by","from","is","are","was","were","be","been","have",
+             "has","had","do","does","did","will","would","this","that","it",
+             "its","we","our","their","not","no","using","used","based","via"}
+
+    def _tok(text: str) -> list[str]:
+        import re as _re
+        return [w for w in _re.findall(r"[a-z0-9]+", text.lower())
+                if w not in _stop and len(w) > 2]
+
+    def _cos(a: list[str], b: list[str]) -> float:
+        if not a or not b:
+            return 0.0
+        ca, cb = Counter(a), Counter(b)
+        keys = set(ca) | set(cb)
+        dot = sum(ca.get(k,0)*cb.get(k,0) for k in keys)
+        ma = math.sqrt(sum(v*v for v in ca.values()))
+        mb = math.sqrt(sum(v*v for v in cb.values()))
+        return dot / (ma * mb) if ma and mb else 0.0
+
+    for i, p in enumerate(papers):
+        if not isinstance(p, dict):
+            continue
+        pid = p.get("paper_id", f"papers[{i}]")
+        title = str(p.get("title", "")).strip()
+        abstract = str(p.get("abstract", "") or "").strip()
+        if title and len(title) > 5 and abstract and len(abstract) > 20:
+            sim = _cos(_tok(title), _tok(abstract))
+            if sim < 0.05:
+                violations.append(DetailedViolation(
+                    file=source_file, record=pid,
+                    path=f"papers.{i}.abstract",
+                    error=f"abstract-title keyword similarity very low ({sim:.3f})",
+                    error_type="content_mismatch",
+                    fix_hint="PMID/DOI를 확인하세요. abstract와 title이 다른 논문의 것일 수 있습니다",
+                ))
 
     return violations
 

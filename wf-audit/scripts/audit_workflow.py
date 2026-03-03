@@ -25,7 +25,7 @@ from canonical_schemas import SCHEMA_VERSION
 from datetime import datetime, timezone
 
 
-_TOTAL_STEPS = 14
+_TOTAL_STEPS = 15
 
 
 def _log_step(step: int, name: str, score: float, violations: int = 0,
@@ -441,6 +441,63 @@ def audit_single_workflow(wf_dir: Path, catalog: dict = None,
     else:
         _log_step(14, "workflow_context", 0.0, 0, verbose=verbose)
 
+    # 15. Content validation (full text vs title matching)
+    content_validation_result = {}
+    try:
+        from content_validator import validate_paper_content_match, suggest_corrections
+        paper_list_file = None
+        for subdir in ("01_papers", "01_literature"):
+            candidate = wf_dir / subdir / "paper_list.json"
+            if candidate.exists():
+                paper_list_file = candidate
+                break
+        if paper_list_file:
+            ft_dir = paper_list_file.parent / "full_texts"
+            cv_result = validate_paper_content_match(paper_list_file, ft_dir)
+            cv_issues = (
+                len(cv_result.get("abstract_title_mismatches", []))
+                + len(cv_result.get("fulltext_title_mismatches", []))
+            )
+            cv_warnings = (
+                len(cv_result.get("missing_fulltexts", []))
+                + len(cv_result.get("too_short_fulltexts", []))
+            )
+            cv_total = cv_issues + cv_warnings
+            cv_score = max(0.0, 1.0 - cv_issues * 0.2 - cv_warnings * 0.05)
+            content_validation_result = {
+                "score": round(cv_score, 3),
+                "issues": cv_issues,
+                "warnings": cv_warnings,
+                "abstract_title_mismatches": cv_result.get("abstract_title_mismatches", []),
+                "fulltext_title_mismatches": cv_result.get("fulltext_title_mismatches", []),
+                "missing_fulltexts": cv_result.get("missing_fulltexts", []),
+                "too_short_fulltexts": cv_result.get("too_short_fulltexts", []),
+                "suggestions": suggest_corrections(cv_result),
+            }
+            all_violations["content_validation"] = {
+                "score": round(cv_score, 3),
+                "violations": (
+                    [f"abstract-title mismatch: {m['paper_id']} (sim={m['similarity']})"
+                     for m in cv_result.get("abstract_title_mismatches", [])]
+                    + [f"fulltext-title mismatch: {m['paper_id']} (sim={m['similarity']})"
+                       for m in cv_result.get("fulltext_title_mismatches", [])]
+                    + [f"missing fulltext: {pid}"
+                       for pid in cv_result.get("missing_fulltexts", [])]
+                    + [f"too short fulltext: {m['paper_id']} ({m['chars']} chars)"
+                       for m in cv_result.get("too_short_fulltexts", [])]
+                ),
+                "detailed_violations": [],
+            }
+            _log_step(15, "content_validation", cv_score,
+                      cv_total, verbose=verbose)
+        else:
+            _log_step(15, "content_validation", 0.0, 0, verbose=verbose)
+    except ImportError:
+        _log_step(15, "content_validation", 0.0, 0, verbose=verbose)
+    except Exception as e:
+        content_validation_result = {"error": str(e)}
+        _log_step(15, "content_validation", 0.0, 1, verbose=verbose)
+
     # --- Aggregate ---
     aggregate_score = aggregate_workflow_score(scores_raw)
     era_info = detect_schema_era(wf_dir)
@@ -466,6 +523,7 @@ def audit_single_workflow(wf_dir: Path, catalog: dict = None,
         "step_field_style": era_info["step_field_style"],
         "scores": all_violations,
         "paper_validity": paper_validity_info,
+        "content_validation": content_validation_result,
         "existing_validation": existing_validation,
         "migration_recommendations": migration_recs,
     }

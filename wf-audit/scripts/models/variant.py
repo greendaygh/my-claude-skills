@@ -20,54 +20,83 @@ Canonical key mappings:
 
 from typing import Any, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from .base import ALLOW_EXTRA
 
 
 # ---------------------------------------------------------------------------
 # Item-level models for each of the 7 components
+# Lenient canonical: accepts 'name' (canonical) or 'description' (legacy)
 # ---------------------------------------------------------------------------
 
 class InputItem(BaseModel):
     model_config = ALLOW_EXTRA
 
-    name: str
+    name: Optional[str] = None
+    description: Optional[str] = None
     source_uo: Optional[str] = None
     specifications: Optional[str] = None
     case_refs: list[str] = Field(default_factory=list)
     evidence_tag: Optional[str] = None
 
+    @model_validator(mode="after")
+    def require_name_or_description(self):
+        if not self.name and not self.description:
+            raise ValueError("name 또는 description 중 하나는 필수")
+        return self
+
 
 class OutputItem(BaseModel):
     model_config = ALLOW_EXTRA
 
-    name: str
+    name: Optional[str] = None
+    description: Optional[str] = None
     destination_uo: Optional[str] = None
     specifications: Optional[str] = None
     case_refs: list[str] = Field(default_factory=list)
     evidence_tag: Optional[str] = None
 
+    @model_validator(mode="after")
+    def require_name_or_description(self):
+        if not self.name and not self.description:
+            raise ValueError("name 또는 description 중 하나는 필수")
+        return self
+
 
 class EquipmentItem(BaseModel):
     model_config = ALLOW_EXTRA
 
-    name: str
+    name: Optional[str] = None
+    description: Optional[str] = None
     model: Optional[str] = None
     manufacturer: Optional[str] = None
     settings: Optional[dict] = None
     case_refs: list[str] = Field(default_factory=list)
     evidence_tag: Optional[str] = None
 
+    @model_validator(mode="after")
+    def require_name_or_description(self):
+        if not self.name and not self.description:
+            raise ValueError("name 또는 description 중 하나는 필수")
+        return self
+
 
 class ConsumableItem(BaseModel):
     model_config = ALLOW_EXTRA
 
-    name: str
+    name: Optional[str] = None
+    description: Optional[str] = None
     catalog: Optional[str] = None
     quantity: Optional[str] = None
     case_refs: list[str] = Field(default_factory=list)
     evidence_tag: Optional[str] = None
+
+    @model_validator(mode="after")
+    def require_name_or_description(self):
+        if not self.name and not self.description:
+            raise ValueError("name 또는 description 중 하나는 필수")
+        return self
 
 
 class MeasurementItem(BaseModel):

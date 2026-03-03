@@ -101,13 +101,14 @@ Phase names: `1_resolve`, `2_collect`, `3_analyze`, `4_compose`, `5_output`
 1. Parse input: extract workflow ID, name, flags
 2. **Auto-detect mode**: Use `Glob(pattern="composition_data.json", path="./workflow-compositions/{WF_ID}_*/")`.
    - Found + no `--fresh` → **Update**: load existing `composition_data.json`, `paper_list.json`, `case_summary.json`. Backup to `_versions/`
-   - Found + `--fresh` → **Fresh**: backup to `_versions/`, proceed as New
+   - Found + `--fresh` → **Fresh**: `mv` entire workflow directory to `_versions/{timestamp}/`, recreate empty directory structure. This ensures no residual files (including `full_texts/`).
    - Not found → **New**
 3. Load workflow from `assets/workflow_catalog.json`
 4. Load UO catalog from `assets/uo_catalog.json`
 5. Classify domain via `assets/domain_classification.json`
 6. Create output directory: `./workflow-compositions/{WF_ID}_{WF_NAME}/` with subdirs
 7. Save `00_metadata/workflow_context.json`
+8. **Gate 1 — WorkflowContext Pydantic Validation**: Validate `workflow_context.json` against `wf-audit/scripts/models/workflow_context.py::WorkflowContext`. Must pass with 0 ValidationError before proceeding.
 
 ## Orchestration — Sub-Skill Delegation
 
@@ -117,19 +118,29 @@ After Phase 1 completes, invoke sub-skills sequentially with verification gates:
 ```
 /wf-literature {wf_dir}
 ```
-**Gate**: Verify `02_cases/case_summary.json` exists and contains >= 3 cases.
+**Gate**: ALL conditions must pass:
+1. `02_cases/case_summary.json` exists and contains >= 3 cases
+2. **Gate 2 Pydantic** passed (PaperList + CaseCard + CaseSummary — 0 ValidationError)
+3. Literature Panel verdict ≠ `reject`
+4. `06_review/literature_panel.json` exists
 
 ### Phase 3+4 — Analysis & Composition
 ```
 /wf-analysis {wf_dir}
 ```
-**Gate**: Verify `04_workflow/uo_mapping.json` and at least one `04_workflow/variant_V*.json` exist.
+**Gate**: ALL conditions must pass:
+1. `04_workflow/uo_mapping.json` and at least one `04_workflow/variant_V*.json` exist
+2. **Gate 3 Pydantic** passed (7 models — 0 ValidationError)
+3. Analysis Panel completed (3 review JSON files exist in `06_review/`)
 
 ### Phase 5 — Output
 ```
 /wf-output {wf_dir}
 ```
-**Gate**: Verify `composition_data.json` and `composition_report.md` exist in `{wf_dir}/`.
+**Gate**: ALL conditions must pass:
+1. `composition_data.json` and `composition_report.md` exist in `{wf_dir}/`
+2. **Gate 4 Full Audit** passed (conformance >= 0.7 + visualization validation)
+3. `00_metadata/audit_report.json` saved
 
 ### Error Recovery
 
@@ -366,7 +377,10 @@ Each workflow entry in `index.json` MUST include:
 │   ├── variant_comparison.mmd
 │   └── workflow_context.mmd
 ├── 06_review/
-│   └── peer_review.md
+│   ├── literature_panel.json
+│   ├── variant_clustering_review.json
+│   ├── uo_mapping_review.json
+│   └── qc_checkpoint_review.json
 ├── composition_report.md
 ├── composition_report_ko.md
 ├── composition_data.json

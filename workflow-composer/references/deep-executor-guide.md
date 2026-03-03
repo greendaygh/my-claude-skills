@@ -8,6 +8,39 @@ the sub-skill chaining approach (wf-literature + wf-analysis + wf-output).
 
 ## PHASE 2: LITERATURE COLLECTION
 
+### 2.0 Full Text Acquisition (Script-Based)
+
+After collecting paper_list.json (via OpenAlex search), run the following scripts
+to fetch structured full text and validate data integrity BEFORE case extraction.
+
+**Step 1: Fetch full text from PMC/Europe PMC**
+
+```bash
+python3 ~/.claude/skills/wf-literature/scripts/fetch_fulltext.py \
+  --input {wf_dir}/01_papers/paper_list.json \
+  --output {wf_dir}
+```
+
+This downloads PMC XML, parses into sections (ABSTRACT, INTRODUCTION, METHODS,
+RESULTS, DISCUSSION), and saves as `01_papers/full_texts/{paper_id}.txt`
+with `=== SECTION ===` headers. Only papers with PMCID and without
+`has_full_text=True` are processed (incremental).
+
+**Step 2: Validate paper data integrity**
+
+```bash
+python3 ~/.claude/skills/wf-literature/scripts/validate_papers.py \
+  --paper-list {wf_dir}/01_papers/paper_list.json \
+  --full-texts {wf_dir}/01_papers/full_texts/ \
+  --check-pmid
+```
+
+Checks abstract-title relevance, full text-title matching, PMID cross-validation.
+If any CRITICAL issues are found, remove the problematic paper and search for
+a replacement before proceeding to case extraction.
+
+**Step 3: Proceed to case extraction only when validation passes (0 critical)**
+
 ### Case Card Structure (MANDATORY)
 
 Every case card MUST use this exact structure. Do NOT simplify.

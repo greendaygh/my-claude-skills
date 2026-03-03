@@ -145,7 +145,7 @@ def migrate_case_card(case_data: dict, paper_index: dict,
 # ---------------------------------------------------------------------------
 
 def enrich_case_card(case_data: dict, paper_info: dict,
-                     composition_data: dict = None) -> dict:
+                     composition_data: dict = None, **kwargs) -> dict:
     """Enrich a case card using paper information (6-principle extraction).
 
     Wrapper around case_enricher.enrich_case_card for unified API.
@@ -154,6 +154,7 @@ def enrich_case_card(case_data: dict, paper_info: dict,
         case_data: existing (already migrated) case card
         paper_info: enriched paper dict with abstract, mesh_terms, etc.
         composition_data: workflow composition_data.json (for workflow_context)
+        **kwargs: extra arguments (e.g. wf_dir) are accepted but not used
 
     Returns:
         Enriched case card dict.

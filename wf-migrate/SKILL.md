@@ -4,10 +4,10 @@ trigger: /wf-migrate
 description: >
   Migrate and enrich legacy workflow compositions to canonical format.
   Phase A performs mechanical field renaming; Phase A.5 applies audit-driven
-  targeted fixes; Phase B enriches case cards with PubMed paper metadata
-  and regenerates reports. All phases run automatically on every invocation.
+  targeted fixes; Phase B enriches existing paper metadata and regenerates reports.
+  Full text acquisition for new workflows is handled by wf-literature.
   Fix results are recorded in audit_report.json to avoid redundant re-processing.
-version: 2.5.0
+version: 2.6.0
 author: SBLab KRIBB
 tags: [biofoundry, workflow, migration, schema-upgrade, enrichment, audit-fix]
 ---
@@ -23,6 +23,23 @@ results as input. Runs three phases automatically:
   fix_status back into audit_report.json to prevent redundant re-processing.
 - **Phase B**: Enriches case cards with PubMed paper metadata, computes real
   completeness scores, and regenerates 13-section reports.
+
+## Role Boundary
+
+**wf-migrate** focuses on format migration and metadata enrichment for **existing** data:
+- Mechanical field renaming, schema upgrades
+- Enriching incomplete metadata via PubMed API
+- PMID cross-validation (title match check before merging — rejects if mismatch)
+- DOI→PMID resolution with immediate title cross-validation
+- Full text saved to external files ONLY when PMC provides actual content (no abstract fallback)
+
+**New paper collection and full text acquisition** is the responsibility of
+**wf-literature** (`scripts/fetch_fulltext.py` + `scripts/validate_papers.py`).
+wf-migrate does NOT search for new papers; it only enriches existing entries.
+
+**Full text policy**: `workflow_migrator.py` only writes P*.txt files when
+`_full_text_pending` contains actual PMC content. If no full text is available,
+the file is NOT created (preventing abstract-as-fulltext contamination).
 
 ## Prerequisites
 

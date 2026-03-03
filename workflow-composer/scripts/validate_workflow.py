@@ -392,11 +392,19 @@ def validate_composition_data_schema(wf_dir: str | Path) -> list[str]:
 # ---------------------------------------------------------------------------
 
 def validate_phase2_gate(wf_dir: str | Path) -> list[str]:
-    """Enhanced Phase 2 gate: case_summary.json has >= 3 valid cases."""
+    """Enhanced Phase 2 gate: cases + full text quality + paper validation.
+
+    Checks:
+    1. case_summary.json exists with >= 3 cases
+    2. full_texts/ directory has at least 1 file with content
+    3. Full text files average length >= 500 chars
+    4. validate_papers.py reports 0 critical issues (if available)
+    """
     violations = []
     wf_dir = Path(wf_dir)
-    cs_path = wf_dir / "02_cases" / "case_summary.json"
 
+    # --- Check 1: case_summary.json ---
+    cs_path = wf_dir / "02_cases" / "case_summary.json"
     if not cs_path.exists():
         violations.append("CRITICAL: 02_cases/case_summary.json not found")
         return violations
@@ -418,6 +426,62 @@ def validate_phase2_gate(wf_dir: str | Path) -> list[str]:
             continue
         if not c.get("case_id"):
             violations.append(f"WARNING: cases[{i}] missing case_id")
+
+    # --- Check 2: full_texts/ directory ---
+    ft_dir = wf_dir / "01_papers" / "full_texts"
+    if ft_dir.exists():
+        ft_files = list(ft_dir.glob("P*.txt"))
+        if not ft_files:
+            violations.append("WARNING: 01_papers/full_texts/ has no P*.txt files")
+        else:
+            # Check 3: average file size
+            total_chars = 0
+            nonempty_count = 0
+            for f in ft_files:
+                try:
+                    size = f.stat().st_size
+                    if size > 0:
+                        nonempty_count += 1
+                        total_chars += size
+                except OSError:
+                    pass
+            if nonempty_count > 0:
+                avg_chars = total_chars / nonempty_count
+                if avg_chars < 500:
+                    violations.append(
+                        f"WARNING: full_texts/ average size {avg_chars:.0f} chars, "
+                        f"expected >= 500 (may indicate incomplete downloads)"
+                    )
+    else:
+        violations.append("WARNING: 01_papers/full_texts/ directory not found")
+
+    # --- Check 4: validate_papers.py (if available) ---
+    paper_list_path = wf_dir / "01_papers" / "paper_list.json"
+    if paper_list_path.exists():
+        try:
+            _validate_papers_mod = Path.home() / ".claude" / "skills" / "wf-literature" / "scripts"
+            if str(_validate_papers_mod) not in sys.path:
+                sys.path.insert(0, str(_validate_papers_mod))
+            from validate_papers import validate_paper_list, validate_fulltext_match
+            pl_result = validate_paper_list(paper_list_path)
+            critical_issues = pl_result.get("critical", [])
+            if critical_issues:
+                for issue in critical_issues[:5]:
+                    violations.append(f"CRITICAL: paper validation — {issue}")
+
+            if ft_dir.exists():
+                ft_result = validate_fulltext_match(paper_list_path, ft_dir)
+                mismatches = ft_result.get("mismatches", [])
+                if mismatches:
+                    for m in mismatches[:3]:
+                        violations.append(
+                            f"CRITICAL: fulltext-title mismatch — {m['paper_id']} "
+                            f"(similarity={m['similarity']})"
+                        )
+        except ImportError:
+            pass
+        except Exception as e:
+            violations.append(f"WARNING: paper validation failed: {e}")
 
     return violations
 

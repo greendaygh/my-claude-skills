@@ -1,5 +1,98 @@
 # Changelog
 
+## [1.10.0] — 2026-03-03
+
+### wf-literature (3.1.0)
+
+#### Added
+- **Script-based full text acquisition** — `fetch_fulltext.py` downloads PMC/Europe PMC XML, parses into structured sections (ABSTRACT, INTRODUCTION, METHODS, RESULTS, DISCUSSION) with `=== SECTION ===` headers
+- **Paper validation** — `validate_papers.py` with Pydantic v2 schema check, abstract-title cosine similarity, fulltext-title matching, optional PMID cross-validation
+- **Metadata repair** — `repair_paper_metadata.py` detects abstract-title mismatches and re-resolves via DOI
+- **Abstract-only cleanup** — `cleanup_abstract_fulltexts.py` removes single-line P*.txt files from `full_texts/`
+- **Batch repair pipeline** — `batch_repair.py` chains metadata→cleanup→fetch→validate across all workflows
+- **3-expert panel review** — `literature_panel_config.json` and `references/panel_protocol.md` for 3-round consensus protocol (한국어 출력)
+- **Pydantic Gate 2** — PaperList + CaseCard + CaseSummary validation before proceeding
+
+#### Changed
+- `pubmed-database` skill dependency removed; replaced by direct PMC API scripts
+- SKILL.md bumped to v3.1.0 with full text acquisition and validation steps
+
+### wf-analysis (2.2.0)
+
+#### Added
+- **Analysis Panel** (self-performed) — 3-expert, 3-round review for variant clustering, UO mapping, and QC checkpoints (한국어 출력)
+- **Pydantic Gate 3** — validates 7 analysis models (StepAlignment, ClusterResult, CommonPattern, ParameterRanges, UoMapping, Variant, QcCheckpoints)
+
+#### Changed
+- Peer review (`scientific-skills:peer-review`) removed; replaced by self-performed Analysis Panel in Phase 4.5
+- Review outputs changed from `peer_review.md` to 3 JSON files in `06_review/`
+
+### wf-audit (2.4.0)
+
+#### Added
+- **Step 15: Content validation** — `content_validator.py` checks abstract-title and fulltext-title keyword similarity, missing/short full texts, duplicate DOIs
+- **Abstract-title mismatch scoring** in `scoring.py` — cosine similarity check (threshold 0.05) with `content_mismatch` error type
+- `suggest_corrections()` generates actionable fix suggestions from content validation results
+
+#### Changed
+- `_TOTAL_STEPS` increased from 14 to 15
+- **Lenient canonical models** — all analysis/variant/QC models now accept legacy field names alongside canonical:
+  - `ClusterResult`: `total_cases` or `case_count`
+  - `QcCheckpoints`: `checkpoint_id` or `qc_id`
+  - `UoMapping`: `uo_assignments` or `mappings`
+  - `Variant` items: `name` or `description`
+  - `PaperList`: `authors` accepts `str | list[str]`, `workflow_id`/`total_papers` optional
+  - `CaseCard`: `Completeness.score` and `WorkflowContextRef.workflow_id` optional
+  - `CommonPattern`: `workflow_skeleton` or `common_skeleton`
+  - `notes` fields accept `str | list[str]`
+- Model validators added for required-one-of-two-fields pattern (`model_validator(mode="after")`)
+
+### wf-migrate (2.6.0)
+
+#### Added
+- **PMID cross-validation** — `validate_pmid_title_match()` compares PubMed title with expected title (cosine >= 0.3) before merge
+- **PMID rejection** — DOI→PMID and title-search PMID results rejected if title mismatch detected
+- **Role boundary documentation** — SKILL.md clarifies wf-migrate vs wf-literature responsibilities
+- **Structured section parsing** — `_parse_pmc_sections()` and `_sections_to_structured_text()` for full PMC XML → structured text
+
+#### Changed
+- `workflow_migrator.py` — full text saved ONLY when `_full_text_pending` has actual PMC content (no abstract fallback)
+- `paper_enricher.py` — `_extract_sections_from_pmc_xml()` removed; replaced by `_parse_pmc_sections()` with all-section extraction
+- `case_migrator.py` — `enrich_case_card()` accepts `**kwargs` for forward compatibility
+- `fetch_pmc_fulltext()` and `fetch_europepmc_fulltext()` return structured text with section headers
+
+### wf-output (2.4.0)
+
+#### Changed
+- Phase reordering: Visualization (5.2) → Validation Gate (5.3) → Korean Translation (5.4)
+- **Full Validation Gate 4** — 3-step mandatory gate: Step A (validate.py + validate_workflow.py), Step B (wf-audit full Pydantic audit, conformance >= 0.7), Step C (8-criteria visualization structure validation)
+- Visualization validation criteria: file completeness, classDef color scheme, UO subgraph structure, output-to-input edges, QC diamond nodes, color legend, UO ID consistency, Mermaid syntax integrity
+- Output contract includes `audit_report.json` and `visualization_validation.json` in `00_metadata/`
+
+### workflow-composer (2.6.0)
+
+#### Added
+- **Gate 1** — WorkflowContext Pydantic validation after Phase 1
+- **Enhanced Phase 2 gate** — 4 conditions: case count + Gate 2 Pydantic + Literature Panel verdict + review file
+- **Enhanced Phase 3+4 gate** — 3 conditions: files + Gate 3 Pydantic + Analysis Panel review files
+- **Enhanced Phase 5 gate** — 3 conditions: files + Gate 4 Full Audit (conformance >= 0.7) + audit report
+
+#### Changed
+- Fresh mode (`--fresh`) now moves entire workflow directory to `_versions/{timestamp}/` instead of just backing up
+- `validate_phase2_gate()` expanded: full_texts/ directory check, average file size >= 500 chars, `validate_papers.py` integration
+- `deep-executor-guide.md` — Step 2.0 added for script-based full text acquisition and validation before case extraction
+- Review output structure changed from `peer_review.md` to 4 JSON files in `06_review/`
+
+## [1.9.0] — 2026-03-02
+
+### prophage-miner (1.0.0)
+
+#### Added
+- **New skill**: Automated prophage literature mining — PubMed search, PMC full text extraction, 3-expert panel consensus, knowledge graph construction
+- Scripts: `search_papers.py`, `fetch_fulltext.py`, `build_graph.py`, `generate_report.py`
+- Assets: `prophage_schema.json`, `panel_config.json`
+- References: `extraction_prompts.md`, `prophage_biology.md`, `panel_protocol.md`
+
 ## [1.8.0] — 2026-03-01
 
 ### workflow-composer (2.5.0)

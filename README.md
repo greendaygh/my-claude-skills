@@ -3,7 +3,7 @@
 SBLab KRIBB의 Claude Code 커스텀 스킬 모음.
 바이오파운드리 워크플로 구성, 과학 문헌 분석, 스킬 자동 생성 등을 지원합니다.
 
-**Version**: 1.9.0
+**Version**: 1.10.0
 
 ---
 
@@ -23,12 +23,12 @@ workflow-composer (Orchestrator v2.4)
 
 | Skill | Version | Description |
 |-------|---------|-------------|
-| **workflow-composer** | 2.5.0 | 5-Phase 오케스트레이터. 카탈로그 조회, 모드 감지(New/Update/Fresh), 배치 resume, canonical 검증, 서브스킬 위임 |
-| **wf-literature** | 2.0.0 | OpenAlex/PubMed 논문 검색, 품질 평가(PD+UC+ES), 7대 원칙 기반 케이스 카드 추출 |
-| **wf-analysis** | 2.1.0 | Step Alignment, 변형 클러스터링, Multi-signal UO 매핑, QC 체크포인트 설계, canonical 7-Component 구조 |
-| **wf-output** | 2.3.0 | Schema v4.0.0 JSON, 13섹션 리포트, Mermaid 시각화 (compact/detailed), canonical/legacy 호환 헬퍼, Validation Gate, 한국어 번역 |
-| **wf-audit** | 2.3.0 | Pydantic v2 기반 40개 워크플로 일괄 감사. canonical format 지원, 01_papers/ 호환, 14-step verbose 진행률, chunked 배치 |
-| **wf-migrate** | 2.5.0 | 레거시 마이그레이션 + audit-driven targeted fix. full-text 분리 저장, circuit breaker, adaptive rate limiting, 멱등 enrichment |
+| **workflow-composer** | 2.6.0 | 5-Phase 오케스트레이터. Pydantic gate 각 Phase, fresh 모드 전체 디렉토리 이동, full text 검증 통합 |
+| **wf-literature** | 3.1.0 | OpenAlex 검색, PMC full text 스크립트 기반 취득, Pydantic 검증, 3인 전문가 패널 리뷰, 배치 복구 파이프라인 |
+| **wf-analysis** | 2.2.0 | Step Alignment, 변형 클러스터링, 3인 Analysis Panel (자체 수행), Pydantic Gate 3, lenient canonical 모델 |
+| **wf-output** | 2.4.0 | 13섹션 리포트, Full Validation Gate 4 (3단계: 스크립트+감사+시각화 구조), Mermaid 8-criteria 검증 |
+| **wf-audit** | 2.4.0 | 15-step 감사 (content validation 추가), lenient canonical 모델 (legacy 필드 호환), abstract-title mismatch 탐지 |
+| **wf-migrate** | 2.6.0 | PMID cross-validation 후 merge, full text policy (abstract fallback 금지), 구조화된 섹션 파싱 |
 
 ### Science & Analysis Skills
 
@@ -58,7 +58,7 @@ workflow-composer (Orchestrator v2.4)
 | Phase | Skill | Input | Output | 핵심 동작 |
 |-------|-------|-------|--------|-----------|
 | 1. Resolve | workflow-composer | 사용자 입력 (ID/이름) | `workflow_context.json`, 디렉토리 구조 | 카탈로그 조회, 모드 감지, 도메인 분류 |
-| 2. Literature | wf-literature | `workflow_context.json` | `paper_list.json`, `case_C*.json` | OpenAlex 검색, PubMed fetch, 케이스 추출 |
+| 2. Literature | wf-literature | `workflow_context.json` | `paper_list.json`, `case_C*.json`, `full_texts/` | OpenAlex 검색, PMC full text 취득, 검증, 케이스 추출 |
 | 3. Analyze | wf-analysis | `case_C*.json` | `step_alignment.json`, `uo_mapping.json`, `variant_V*.json` | Step Alignment, UO 매핑, 변형 도출, 7-Component |
 | 4. Compose | wf-analysis | `uo_mapping.json` | `variant_V*.json`, `qc_checkpoints.json` | 7-Component 채우기, Gap-Fill |
 | 5. Output | wf-output | `variant_V*.json` | `composition_report.md`, `composition_data.json`, `*.mmd` | 13섹션 리포트, Mermaid 시각화, 한국어 번역 |
@@ -116,9 +116,9 @@ my-claude-skills/
 │   └── references/       # deep-executor-guide.md
 ├── wf-literature/        # Phase 2: Literature Collection
 │   ├── SKILL.md
-│   ├── scripts/          # collect_case.py
-│   ├── assets/           # case_template.json
-│   └── references/       # case-collection-guide.md
+│   ├── scripts/          # collect_case.py, fetch_fulltext.py, validate_papers.py, repair_paper_metadata.py, cleanup_abstract_fulltexts.py, batch_repair.py
+│   ├── assets/           # case_template.json, literature_panel_config.json
+│   └── references/       # case-collection-guide.md, panel_protocol.md
 ├── wf-analysis/          # Phase 3+4: Analysis & Composition
 │   ├── SKILL.md
 │   └── references/       # case-analysis-guide.md, unit-operation-mapping.md, hw/sw-component-guide.md

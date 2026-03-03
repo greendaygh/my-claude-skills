@@ -5,11 +5,14 @@ Covers:
   - common_pattern.json
   - parameter_ranges.json
   - step_alignment.json
+
+Lenient canonical: ClusterResult accepts 'total_cases' (canonical)
+or 'case_count' (legacy).
 """
 
 from typing import Any, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from .base import ALLOW_EXTRA
 
@@ -35,12 +38,19 @@ class ClusterResult(BaseModel):
     workflow_id: str
     workflow_name: Optional[str] = None
     analysis_date: Optional[str] = None
-    total_cases: int
+    total_cases: Optional[int] = None
+    case_count: Optional[int] = None
     clustering_method: Optional[str] = None
     primary_axis: Optional[str] = None
     secondary_axes: Optional[list[str]] = None
-    notes: Optional[str] = None
+    notes: Optional[str | list[str]] = None
     variants: list[ClusterVariant]
+
+    @model_validator(mode="after")
+    def require_count(self):
+        if self.total_cases is None and self.case_count is None:
+            raise ValueError("total_cases 또는 case_count 중 하나는 필수")
+        return self
 
 
 # ---------------------------------------------------------------------------
@@ -68,10 +78,12 @@ class CommonPattern(BaseModel):
     workflow_id: str
     workflow_name: Optional[str] = None
     analysis_date: Optional[str] = None
-    total_cases: int
+    total_cases: Optional[int] = None
+    case_count: Optional[int] = None
     threshold_mandatory: Optional[float] = None
-    notes: Optional[str] = None
-    workflow_skeleton: WorkflowSkeleton
+    notes: Optional[str | list[str]] = None
+    workflow_skeleton: Optional[WorkflowSkeleton] = None
+    common_skeleton: Optional[Any] = None
 
 
 # ---------------------------------------------------------------------------
@@ -95,9 +107,10 @@ class ParameterRanges(BaseModel):
     workflow_id: str
     workflow_name: Optional[str] = None
     analysis_date: Optional[str] = None
-    total_cases: int
+    total_cases: Optional[int] = None
+    case_count: Optional[int] = None
     aggregation_method: Optional[str] = None
-    notes: Optional[str] = None
+    notes: Optional[str | list[str]] = None
     parameters: list[ParameterEntry]
 
 
@@ -120,7 +133,8 @@ class StepAlignment(BaseModel):
     workflow_id: str
     workflow_name: Optional[str] = None
     analysis_date: Optional[str] = None
-    total_cases: int
+    total_cases: Optional[int] = None
+    case_count: Optional[int] = None
     alignment_method: Optional[str] = None
-    notes: Optional[str] = None
+    notes: Optional[str | list[str]] = None
     alignment: list[AlignmentEntry]

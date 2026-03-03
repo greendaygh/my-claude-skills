@@ -1,8 +1,11 @@
-"""Canonical Pydantic model for uo_mapping.json."""
+"""Canonical Pydantic model for uo_mapping.json.
+
+Lenient canonical: accepts 'uo_assignments' (canonical) or 'mappings' (legacy).
+"""
 
 from typing import Any, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from .base import ALLOW_EXTRA
 
@@ -31,4 +34,11 @@ class UoMapping(BaseModel):
     schema_version: Optional[str] = None
     notes: Optional[str] = None
     scoring_weights: Optional[dict] = None
-    uo_assignments: list[UoAssignment]
+    uo_assignments: Optional[list[UoAssignment]] = None
+    mappings: Optional[list] = None
+
+    @model_validator(mode="after")
+    def require_assignments_or_mappings(self):
+        if not self.uo_assignments and not self.mappings:
+            raise ValueError("uo_assignments 또는 mappings 중 하나는 필수")
+        return self
