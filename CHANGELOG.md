@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.10.1] — 2026-03-03
+
+### wf-literature (3.1.1)
+
+#### Changed
+- **Per-paper expert panel review** — panel now reviews each paper individually with per-paper verdict (accept/flag_recheck/reject) instead of collection-level review
+- Panel moved from Phase 2.6 to Phase 2.4 (before case extraction), only accepted papers proceed to case extraction (Phase 2.5)
+- Pydantic Gate 2 renumbered to Phase 2.6
+- `panel_protocol.md` rewritten for per-paper 3-round protocol with Korean output format and detailed JSON schema
+- Gate condition: `accepted_count` >= 3 (replaces collection-level verdict check)
+
+### workflow-composer (2.6.1)
+
+#### Changed
+- Phase 2 gate simplified: `literature_panel.json` must exist with `accepted_count` >= 3 (replaces separate verdict and file existence checks)
+
 ## [1.10.0] — 2026-03-03
 
 ### wf-literature (3.1.0)

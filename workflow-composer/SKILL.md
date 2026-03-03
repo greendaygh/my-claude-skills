@@ -121,8 +121,7 @@ After Phase 1 completes, invoke sub-skills sequentially with verification gates:
 **Gate**: ALL conditions must pass:
 1. `02_cases/case_summary.json` exists and contains >= 3 cases
 2. **Gate 2 Pydantic** passed (PaperList + CaseCard + CaseSummary — 0 ValidationError)
-3. Literature Panel verdict ≠ `reject`
-4. `06_review/literature_panel.json` exists
+3. `06_review/literature_panel.json` exists with `accepted_count` >= 3 (per-paper review)
 
 ### Phase 3+4 — Analysis & Composition
 ```

@@ -30,7 +30,7 @@ Pydantic validation replace external skill dependencies for paper details.
 | File | Purpose |
 |------|---------|
 | `references/case-collection-guide.md` | 6 extraction principles, case card structure |
-| `references/panel_protocol.md` | Expert panel review protocol (optional escalation) |
+| `references/panel_protocol.md` | Per-paper expert panel review protocol (mandatory) |
 | `assets/case_template.json` | Case card JSON template |
 | `assets/literature_panel_config.json` | 3-expert panel configuration |
 | `scripts/fetch_fulltext.py` | PMC/Europe PMC full text download |
@@ -121,16 +121,68 @@ Evaluate papers on 3 criteria (0-1 scale):
 Composite = 0.4*PD + 0.4*UC + 0.2*ES. Threshold >= 0.4. Select top 8 papers.
 - Output: `01_papers/paper_ranking.json`
 
-### 2.4 Case Extraction
+### 2.4 Per-Paper Expert Panel Review — MANDATORY
 
-For each qualifying paper, create one case card per `references/case-collection-guide.md`:
+3명 전문가가 **각 논문을 개별 리뷰**하여 accept/reject를 판정한다. accept된 논문만 케이스 추출(2.5)로 진행.
+See `references/panel_protocol.md`.
+
+**Panel composition** (3명, see `assets/literature_panel_config.json`):
+- **문헌 전문가 (Literature Specialist)**: PMID/DOI/PMCID 매핑 정확성, 메타데이터 완전성, 저널 적합성
+- **도메인 전문가 (Domain Expert)**: 워크플로우 관련성, 프로토콜 상세도, 핵심 기술 커버리지
+- **비판적 검토자 (Critical Reviewer)**: 근거 수준, 방법론 독창성, 재현 가능성
+
+**Protocol**: 논문마다 3-round process (독립 리뷰 → 쟁점 토론 → 합의 투표).
+
+**논문별 verdict**: `accept` | `flag_recheck` | `reject`
+- `accept`: 케이스 추출 대상
+- `flag_recheck`: 메타데이터 보완 후 재평가 (max 1 retry)
+- `reject`: 케이스 추출 제외, 대체 논문 검색 권고
+
+**출력 언어**: 한국어 (assessment, issues, discussion_summary 모두 한국어. JSON 키는 영어 유지)
+
+**Output**: `06_review/literature_panel.json`
+
+```json
+{
+  "workflow_id": "WB005",
+  "panel_date": "2026-03-03",
+  "panel_type": "per_paper_review",
+  "language": "ko",
+  "total_papers": 9,
+  "accepted_count": 7,
+  "rejected_count": 1,
+  "flagged_count": 1,
+  "paper_reviews": [
+    {
+      "paper_id": "P001",
+      "title": "...",
+      "reviews": {
+        "literature_specialist": { "score": 0.85, "assessment": "...(한국어)" },
+        "domain_expert": { "score": 0.80, "assessment": "...(한국어)" },
+        "critical_reviewer": { "score": 0.78, "assessment": "...(한국어)" }
+      },
+      "discussion_summary": "토론 요약 (한국어)",
+      "verdict": "accept",
+      "aggregate_score": 0.81
+    }
+  ],
+  "overall_summary": "전체 논문 선별 결과 요약 (한국어)",
+  "action_items": ["reject된 논문 대체 검색 권고 등"]
+}
+```
+
+**Gate**: `accepted_count` >= 3. If not met, return to 2.1 with modified queries.
+
+### 2.5 Case Extraction
+
+For each **accepted** paper (verdict = `accept` in `literature_panel.json`), create one case card per `references/case-collection-guide.md`:
 - Follow the 6 extraction principles (source fidelity, exhaustive check, etc.)
 - Use `assets/case_template.json` structure
 - Save `02_cases/case_C001.json` through `case_C0XX.json`
 - Save `02_cases/case_summary.json`
 - **Update mode**: continue numbering from existing cases
 
-### 2.5 Pydantic Gate 2 — MANDATORY
+### 2.6 Pydantic Gate 2 — MANDATORY
 
 Validate all Phase 2 outputs before proceeding. Uses `wf-audit/scripts/models/` canonical models.
 
@@ -159,20 +211,6 @@ with open(f"{wf_dir}/02_cases/case_summary.json") as f:
 ```
 
 **Pass**: 0 ValidationError. **Fail**: fix using error hints, re-validate (max 2 retries).
-
-### 2.6 Expert Panel Review — MANDATORY
-
-Panel composition (3명, see `assets/literature_panel_config.json`):
-- **문헌 전문가 (Literature Specialist)**: PMID/DOI/PMCID 매핑 정확성, 메타데이터 완전성, 중복 탐지
-- **도메인 전문가 (Domain Expert — Full Text Relevance Reviewer)**: 각 full text의 워크플로우 관련성 판정 (관련/부분관련/무관), 프로토콜 상세도, 핵심 기술 커버리지, 무관 논문 교체 권고
-- **비판적 검토자 (Critical Reviewer)**: 수집 편향 (지역/시기/방법론), 근거 수준, 핵심 논문 누락
-
-Protocol: 3-round process (독립 리뷰 → 쟁점 토론 → 합의 투표).
-See `references/panel_protocol.md`.
-
-**출력 언어**: 한국어 (assessment, issues, recommendations, discussion_summary 모두 한국어로 작성. JSON 키 이름은 영어 유지)
-**verdict**: `accept` | `flag_recheck` | `reject`
-**Output**: `06_review/literature_panel.json`
 
 ## External Skill Dependencies
 
