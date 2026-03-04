@@ -1,0 +1,127 @@
+{
+  "description": "Template for extracting structured information from scientific papers. Each UO follows a 7-component structure.",
+  "extraction_fields": {
+    "workflows": {
+      "description": "Workflows identified in the paper",
+      "fields": {
+        "catalog_id": "Matching workflow ID from workflow_catalog.json (null if new)",
+        "name": "Workflow name",
+        "description": "Brief description of what the workflow does",
+        "is_new": "true if not found in workflow_catalog.json",
+        "confidence": "0.0-1.0 confidence score",
+        "source_section": "Paper section where this was found"
+      }
+    },
+    "hardware_uos": {
+      "description": "Hardware Unit Operations (wet-lab, physical). 7-component structure.",
+      "fields": {
+        "catalog_id": "Matching UO ID from uo_catalog.json (null if new)",
+        "name": "Unit operation name",
+        "is_new": "true if not found in uo_catalog.json",
+        "input": "Input materials/samples for this UO",
+        "output": "Output materials/products from this UO",
+        "equipment": "Equipment/instruments used",
+        "consumables": "Consumable items used (tips, plates, tubes, etc.)",
+        "material_and_method": "Detailed protocol or method description",
+        "result": "Expected or observed results",
+        "discussion": "Notes, caveats, or discussions about this UO",
+        "confidence": "0.0-1.0 confidence score",
+        "source_section": "Paper section where this was found"
+      }
+    },
+    "software_uos": {
+      "description": "Software Unit Operations (data processing, analysis). 7-component structure.",
+      "fields": {
+        "catalog_id": "Matching UO ID from uo_catalog.json (null if new)",
+        "name": "Unit operation name",
+        "is_new": "true if not found in uo_catalog.json",
+        "input": "Input data/files for this UO",
+        "output": "Output data/files from this UO",
+        "parameters": "Configuration parameters or settings",
+        "environment": "Software environment, dependencies, or versions",
+        "method": "Algorithm or computational method description",
+        "result": "Expected or observed results",
+        "discussion": "Notes about performance, limitations, etc.",
+        "confidence": "0.0-1.0 confidence score",
+        "source_section": "Paper section where this was found"
+      }
+    },
+    "equipment": {
+      "description": "Equipment and instruments mentioned in the paper",
+      "fields": {
+        "name": "Equipment name",
+        "manufacturer": "Manufacturer name",
+        "model": "Model number or name",
+        "settings": "Settings or parameters used",
+        "mapped_uo_id": "UO that uses this equipment",
+        "confidence": "0.0-1.0 confidence score",
+        "source_section": "Paper section where this was found"
+      }
+    },
+    "consumables": {
+      "description": "Consumable items (tips, plates, tubes, kits, etc.)",
+      "fields": {
+        "name": "Consumable name",
+        "type": "Category (plate, tip, tube, kit, membrane, etc.)",
+        "manufacturer": "Manufacturer name",
+        "catalog_number": "Catalog or part number",
+        "specification": "Size, volume, material, etc.",
+        "confidence": "0.0-1.0 confidence score",
+        "source_section": "Paper section where this was found"
+      }
+    },
+    "reagents": {
+      "description": "Chemical reagents and biological materials",
+      "fields": {
+        "name": "Reagent name",
+        "type": "Category (enzyme, buffer, media, antibiotic, etc.)",
+        "manufacturer": "Manufacturer/supplier",
+        "catalog_number": "Catalog number",
+        "concentration": "Concentration or amount used",
+        "confidence": "0.0-1.0 confidence score",
+        "source_section": "Paper section where this was found"
+      }
+    },
+    "samples": {
+      "description": "Biological samples and organisms",
+      "fields": {
+        "name": "Sample name or identifier",
+        "type": "Category (strain, cell line, tissue, plasmid, etc.)",
+        "organism": "Organism species",
+        "source": "Source or origin",
+        "description": "Additional details",
+        "confidence": "0.0-1.0 confidence score",
+        "source_section": "Paper section where this was found"
+      }
+    },
+    "uo_connections": {
+      "description": "Connections between unit operations (workflow structure)",
+      "fields": {
+        "from_uo": "Source UO name or ID",
+        "to_uo": "Target UO name or ID",
+        "transfer_type": "sample | data | control_signal",
+        "transfer_object": "What is transferred between UOs",
+        "confidence": "0.0-1.0 confidence score"
+      }
+    },
+    "qc_checkpoints": {
+      "description": "Quality control checkpoints in the workflow",
+      "fields": {
+        "name": "QC checkpoint name",
+        "after_uo": "UO after which this QC is performed",
+        "metric": "What is measured",
+        "threshold": "Pass/fail criteria",
+        "action_on_fail": "What happens on failure",
+        "confidence": "0.0-1.0 confidence score"
+      }
+    }
+  },
+  "extraction_guidelines": [
+    "Extract ALL unit operations mentioned, even if they seem minor",
+    "For each UO, fill as many of the 7 components as the paper provides",
+    "Mark is_new=true for UOs not found in uo_catalog.json",
+    "Include confidence scores based on how explicitly the information is stated",
+    "Note the source_section (METHODS, RESULTS, etc.) for traceability",
+    "Look for workflow variants: different combinations of UOs for the same workflow"
+  ]
+}

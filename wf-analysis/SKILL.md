@@ -170,6 +170,25 @@ for fp in glob.glob(f"{wf_dir}/04_workflow/variant_V*.json"):
 **Consensus Rules**: 3명 중 2명 이상 pass → pass. 1명이라도 fail → revision_needed.
 All 3 topics must pass → proceed to Phase 5. If `revision_needed` → fix and re-review (max 1 retry).
 
+**MANDATORY — Analysis Review Schema Verification**:
+
+```python
+import json
+for review_file in ["variant_clustering_review.json", "uo_mapping_review.json", "qc_checkpoint_review.json"]:
+    path = f"{wf_dir}/06_review/{review_file}"
+    with open(path) as f:
+        review = json.load(f)
+    assert review.get("language") == "ko", f"{review_file}: language must be 'ko'"
+    assert "experts" in review, f"{review_file}: experts array missing"
+    assert len(review["experts"]) >= 3, f"{review_file}: need >= 3 experts, got {len(review['experts'])}"
+    assert "discussion_summary" in review, f"{review_file}: discussion_summary missing"
+    assert "consensus" in review, f"{review_file}: consensus object missing"
+    assert review["consensus"].get("verdict") in ("pass", "revision_needed", "fail"), \
+        f"{review_file}: invalid consensus verdict"
+```
+
+If assertion fails: regenerate the failing review file(s) following the 3-expert panel JSON schema above. Max 2 retries.
+
 ## External Skill Dependencies
 
 None (peer-review replaced by self-performed Analysis Panel in Phase 4.5).

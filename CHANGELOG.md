@@ -1,5 +1,40 @@
 # Changelog
 
+## [1.11.0] — 2026-03-04
+
+### wf-paper-mining (1.0.0)
+
+#### Added
+- **New skill**: Biofoundry workflow paper mining — PubMed primary + OpenAlex fallback search, PMC full text extraction, 4-panel expert review, resource & variant extraction
+- **Thin Controller orchestration** — RunManifest-driven deterministic execution; no LLM memory dependency
+- **Per-run paper lists** (`paper_list_{run_id}.json`) — prevents unbounded file growth across repeated runs
+- **4-panel expert review**: Panel A (UO candidates), Panel B (paper relevance, lenient), Panel C (extraction accuracy), Panel D (variant validation)
+- **Pydantic v2 validation** — StrictModel for state tracking, FlexModel for LLM-generated extractions
+- **Saturation detection** with 4-level overlap tracking to skip exhausted workflows
+- **Domain-grouped batch execution** — 64 workflows across 7 domains with session budgeting
+- **Data migration script** (`migrate_dirs.py`) for directory naming convention
+- Validated against 64 existing workflows in `/dev/wf-mining` (0 violations)
+
+### workflow-composer (2.6.1)
+
+#### Changed
+- Minor SKILL.md updates for pipeline delegation clarity
+
+### wf-literature (3.1.1)
+
+#### Changed
+- Minor SKILL.md updates for full text acquisition guidance
+
+### wf-analysis (2.2.0)
+
+#### Changed
+- Minor SKILL.md formatting updates
+
+### wf-audit (2.4.0)
+
+#### Changed
+- `workflow_context.py` model fields updated for broader compatibility
+
 ## [1.10.1] — 2026-03-03
 
 ### wf-literature (3.1.1)

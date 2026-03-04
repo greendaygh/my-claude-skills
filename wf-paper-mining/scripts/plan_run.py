@@ -1,0 +1,241 @@
+"""Generate a deterministic RunManifest for the executor subagent.
+
+CLI:
+    python -m scripts.plan_run \
+      --wf-id WB030 \
+      --registry ~/dev/wf-mining/run_registry.json \
+      --assets ~/.claude/skills/wf-paper-mining/assets \
+      --output ~/dev/wf-mining/WB030/runs/
+
+Output: {output}/run_manifest_{run_id}.json
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+import time
+from pathlib import Path
+
+from .run_tracker import RunTracker
+from .models.manifest import (
+    RunManifest, PhaseConfig, PanelDecision, PanelConfig,
+    SearchConfig, FilePaths, SessionContext,
+)
+
+
+def _find_domain(extraction_config: dict, wf_id: str) -> str:
+    for domain_name, group in extraction_config.get("domain_groups", {}).items():
+        if wf_id in group.get("workflows", []):
+            return domain_name
+    return "unknown"
+
+
+def _get_wf_description(workflow_catalog: dict, wf_id: str) -> str:
+    wf = workflow_catalog.get("workflows", {}).get(wf_id, {})
+    name = wf.get("name", wf_id)
+    desc = wf.get("description", "")
+    return f"{name}: {desc}" if desc else name
+
+
+def _get_uo_candidates(uo_catalog: dict) -> list[str]:
+    return sorted(uo_catalog.get("unit_operations", {}).keys())
+
+
+def _panel_a_cached(wf_output_dir: Path) -> bool:
+    return (wf_output_dir / "reviews" / "panel_A_uo_candidates.json").exists()
+
+
+def _collect_pending(tracker: RunTracker, wf_id: str) -> tuple[list[str], list[str]]:
+    """Split into pending_papers (need fetch) and pending_extractions (need extract)."""
+    wf = tracker._registry.workflows.get(wf_id)
+    if not wf:
+        return [], []
+    pending_papers = [
+        pid for pid, ps in wf.paper_status.items()
+        if ps.status == "pending"
+    ]
+    pending_extractions = [
+        pid for pid, ps in wf.paper_status.items()
+        if ps.status == "fetched"
+    ]
+    return pending_papers, pending_extractions
+
+
+def _build_file_paths(assets_dir: Path, wf_output_dir: Path) -> FilePaths:
+    return FilePaths(
+        extraction_guide=str(assets_dir / "extraction_template.json"),
+        panel_protocol=str(assets_dir / "panel_configs.json"),
+        extraction_template=str(assets_dir / "extraction_template.json"),
+        panel_configs=str(assets_dir / "panel_configs.json"),
+        wf_output_dir=str(wf_output_dir),
+        domain_context=str(assets_dir / "extraction_config.json"),
+    )
+
+
+def _generate_seed() -> int:
+    seed = int(time.time() * 1000) % (2**31 - 1)
+    return max(seed, 1)
+
+
+def _build_skip_manifest(
+    wf_id: str,
+    run_id: int,
+    reason: str,
+    file_paths: FilePaths,
+    session_context: SessionContext,
+) -> RunManifest:
+    skip_panel = PanelDecision(run=False, mode="skip", reason="action_skip")
+    return RunManifest(
+        workflow_id=wf_id,
+        run_id=run_id,
+        action="skip",
+        reason=reason,
+        phases=PhaseConfig(
+            phase1_resolve=False,
+            phase2_search=False,
+            phase3_fetch=False,
+            phase4_extract=False,
+            phase4_5_aggregate=False,
+        ),
+        panels=PanelConfig(
+            panel_a=skip_panel,
+            panel_b=skip_panel,
+            panel_c=skip_panel,
+            panel_d=skip_panel,
+        ),
+        file_paths=file_paths,
+        session_context=session_context,
+    )
+
+
+def plan_run(
+    wf_id: str,
+    registry_path: Path,
+    assets_dir: Path,
+    output_dir: Path,
+) -> Path:
+    tracker = RunTracker(registry_path)
+
+    exec_info = tracker.determine_execution(wf_id)
+    action = exec_info["action"]
+    is_first_run = exec_info.get("is_first_run", False)
+    run_count = exec_info.get("run_count", 0)
+    run_id = run_count + 1
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    manifest_path = output_dir / f"run_manifest_{run_id}.json"
+
+    wf_output_dir = output_dir.parent
+
+    extraction_config = json.loads((assets_dir / "extraction_config.json").read_text())
+    workflow_catalog = json.loads((assets_dir / "workflow_catalog.json").read_text())
+    uo_catalog = json.loads((assets_dir / "uo_catalog.json").read_text())
+
+    domain = _find_domain(extraction_config, wf_id)
+    uo_candidates = _get_uo_candidates(uo_catalog)
+    wf_description = _get_wf_description(workflow_catalog, wf_id)
+
+    file_paths = _build_file_paths(assets_dir, wf_output_dir)
+    session_context = SessionContext(
+        domain=domain,
+        uo_candidates=uo_candidates,
+        wf_description=wf_description,
+    )
+
+    if action == "skip":
+        manifest = _build_skip_manifest(
+            wf_id, run_id,
+            exec_info.get("reason", "saturated"),
+            file_paths, session_context,
+        )
+        manifest_path.write_text(manifest.model_dump_json(indent=2))
+        return manifest_path
+
+    panel_mode = tracker.determine_panel_mode(wf_id)
+    saturation_action = exec_info.get("saturation_action", "search")
+    is_saturated = saturation_action == "skip"
+
+    has_panel_a_cache = _panel_a_cached(wf_output_dir)
+    run_panel_a = is_first_run and not has_panel_a_cache
+
+    phases = PhaseConfig(
+        phase1_resolve=is_first_run and not has_panel_a_cache,
+        phase2_search=not is_saturated,
+        phase3_fetch=not is_saturated,
+        phase4_extract=not is_saturated,
+        phase4_5_aggregate=True,
+    )
+
+    panels = PanelConfig(
+        panel_a=PanelDecision(
+            run=run_panel_a,
+            mode="full" if run_panel_a else "skip",
+            reason="first_run" if run_panel_a else "cached",
+        ),
+        panel_b=PanelDecision(
+            run=not is_saturated,
+            mode=panel_mode if not is_saturated else "skip",
+            reason="new_papers" if not is_saturated else "saturated",
+        ),
+        panel_c=PanelDecision(
+            run=not is_saturated,
+            mode=panel_mode if not is_saturated else "skip",
+            reason="new_extractions" if not is_saturated else "saturated",
+        ),
+        panel_d=PanelDecision(
+            run=False,
+            mode=panel_mode,
+            reason="deferred_until_aggregate",
+        ),
+    )
+
+    pending_papers, pending_extractions = _collect_pending(tracker, wf_id)
+
+    search_settings = extraction_config.get("search_settings", {})
+    search_config = SearchConfig(
+        exclude_dois=tracker.get_known_dois(wf_id),
+        select_n=search_settings.get("default_select_n", 10),
+        seed=_generate_seed(),
+    )
+
+    manifest = RunManifest(
+        workflow_id=wf_id,
+        run_id=run_id,
+        action="execute",
+        phases=phases,
+        panels=panels,
+        search_config=search_config,
+        pending_papers=pending_papers,
+        pending_extractions=pending_extractions,
+        file_paths=file_paths,
+        session_context=session_context,
+    )
+
+    manifest_path.write_text(manifest.model_dump_json(indent=2))
+    return manifest_path
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        prog="plan_run",
+        description="Generate a deterministic RunManifest for the executor agent.",
+    )
+    parser.add_argument("--wf-id", required=True)
+    parser.add_argument("--registry", required=True)
+    parser.add_argument("--assets", required=True)
+    parser.add_argument("--output", required=True)
+    args = parser.parse_args()
+
+    manifest_path = plan_run(
+        wf_id=args.wf_id,
+        registry_path=Path(args.registry).expanduser().resolve(),
+        assets_dir=Path(args.assets).expanduser().resolve(),
+        output_dir=Path(args.output).expanduser().resolve(),
+    )
+
+    print(json.dumps({"manifest_path": str(manifest_path)}, ensure_ascii=False))
+
+
+if __name__ == "__main__":
+    main()

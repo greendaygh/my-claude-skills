@@ -107,8 +107,30 @@ Phase names: `1_resolve`, `2_collect`, `3_analyze`, `4_compose`, `5_output`
 4. Load UO catalog from `assets/uo_catalog.json`
 5. Classify domain via `assets/domain_classification.json`
 6. Create output directory: `./workflow-compositions/{WF_ID}_{WF_NAME}/` with subdirs
-7. Save `00_metadata/workflow_context.json`
-8. **Gate 1 — WorkflowContext Pydantic Validation**: Validate `workflow_context.json` against `wf-audit/scripts/models/workflow_context.py::WorkflowContext`. Must pass with 0 ValidationError before proceeding.
+7. Run `scripts/resolve_workflow.py` to create base `00_metadata/workflow_context.json` (generates: workflow_id, workflow_name, category, description, domain, domain_keywords, mode, version, composition_date, search_terms)
+8. **Agent enrichment (merge pattern)** — Read the generated `workflow_context.json`, then add the following fields using domain knowledge + `assets/uo_catalog.json`. Write back merged JSON preserving all existing fields:
+   - `upstream_workflows`: list of workflow IDs (e.g. `["WB045", "WB050"]`) that feed into this workflow
+   - `downstream_workflows`: list of workflow IDs that consume this workflow's output
+   - `target_organisms`: common target organisms (e.g. `["E. coli", "S. cerevisiae"]`)
+   - `key_techniques`: 3-7 key laboratory techniques used in this workflow type
+   - `uo_candidates`: 3-8 UO IDs with names from `uo_catalog.json` (format: `"UHW010 Liquid Handling"`)
+   - `quality_metrics`: `{"target_papers": "10-20", "target_cases": "8-15", "target_variants": "3-6", "min_confidence": 0.75}`
+9. **Gate 1 — WorkflowContext Pydantic + Content Validation**:
+   ```python
+   import json
+   with open(f"{wf_dir}/00_metadata/workflow_context.json") as f:
+       ctx = json.load(f)
+   # Pydantic schema validation
+   from wf_audit.scripts.models.workflow_context import WorkflowContext
+   WorkflowContext.model_validate(ctx)
+   # Agent enrichment completeness check
+   for field in ["upstream_workflows", "downstream_workflows", "key_techniques", "uo_candidates"]:
+       assert field in ctx and len(ctx[field]) > 0, \
+           f"Agent enrichment missing: {field} is empty or absent"
+   assert "quality_metrics" in ctx and ctx["quality_metrics"], \
+       "quality_metrics missing or empty"
+   ```
+   Must pass with 0 errors before proceeding.
 
 ## Orchestration — Sub-Skill Delegation
 
@@ -122,6 +144,8 @@ After Phase 1 completes, invoke sub-skills sequentially with verification gates:
 1. `02_cases/case_summary.json` exists and contains >= 3 cases
 2. **Gate 2 Pydantic** passed (PaperList + CaseCard + CaseSummary — 0 ValidationError)
 3. `06_review/literature_panel.json` exists with `accepted_count` >= 3 (per-paper review)
+4. `01_papers/full_texts/` has `.txt` file for each paper with non-empty pmcid (file existence, not just `has_full_text` flag)
+5. `literature_panel.json` has `paper_reviews[]` with per-paper 3-expert reviews (`literature_specialist`, `domain_expert`, `critical_reviewer`)
 
 ### Phase 3+4 — Analysis & Composition
 ```
@@ -130,7 +154,7 @@ After Phase 1 completes, invoke sub-skills sequentially with verification gates:
 **Gate**: ALL conditions must pass:
 1. `04_workflow/uo_mapping.json` and at least one `04_workflow/variant_V*.json` exist
 2. **Gate 3 Pydantic** passed (7 models — 0 ValidationError)
-3. Analysis Panel completed (3 review JSON files exist in `06_review/`)
+3. Analysis Panel completed: 3 review JSON files in `06_review/` with `experts[]` >= 3, `language` == `"ko"`, `consensus.verdict` present
 
 ### Phase 5 — Output
 ```

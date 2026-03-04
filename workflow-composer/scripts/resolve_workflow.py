@@ -2,7 +2,9 @@
 """
 resolve_workflow.py — Parse workflow ID/name and create output directory structure.
 
-v2.0.0: Simplified to 2 modes (New/Update), removed upgrade_manager dependency.
+v3.0.0: Extended workflow_context.json with deterministic fields
+        (mode, composition_date, version, search_terms, domain_keywords).
+        Removed non-portable output_directory field.
 """
 
 import json
@@ -34,6 +36,28 @@ def load_uo_catalog():
     uo_path = ASSETS_DIR / "uo_catalog.json"
     with open(uo_path, "r", encoding="utf-8") as f:
         return json.load(f)
+
+
+def load_search_config():
+    """Load search config for technique-specific keywords."""
+    config_path = ASSETS_DIR / "search_config.json"
+    if not config_path.exists():
+        return {}
+    with open(config_path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def _extract_search_terms(workflow_id: str, search_config: dict) -> list[str]:
+    """Extract search terms from search_config.json technique_templates."""
+    domain_queries = search_config.get("domain_queries", {})
+    for _domain_name, domain_data in domain_queries.items():
+        templates = domain_data.get("technique_templates", {})
+        if workflow_id in templates:
+            entry = templates[workflow_id]
+            terms = list(entry.get("keywords", []))
+            terms.extend(entry.get("synonyms", []))
+            return terms
+    return []
 
 
 def parse_workflow_input(user_input: str, catalog: dict) -> dict:
@@ -109,8 +133,35 @@ def create_output_directory(workflow_id: str, workflow_name: str, base_dir: str 
     return wf_dir
 
 
-def create_workflow_context(workflow_data: dict, domain_info: dict, wf_dir: Path) -> dict:
-    """Create and save workflow_context.json."""
+def create_workflow_context(
+    workflow_data: dict,
+    domain_info: dict,
+    wf_dir: Path,
+    *,
+    mode: str = "new",
+    fresh: bool = False,
+    existing_version: float | None = None,
+) -> dict:
+    """Create and save workflow_context.json with deterministic fields.
+
+    Args:
+        mode: "new" or "update"
+        fresh: True if --fresh flag was used (overrides mode display to "fresh")
+        existing_version: current version from existing workflow_context.json (update mode)
+    """
+    search_config = load_search_config()
+    search_terms = _extract_search_terms(workflow_data["id"], search_config)
+
+    if fresh:
+        display_mode = "fresh"
+        version = 1.0
+    elif mode == "update":
+        display_mode = "update"
+        version = round((existing_version or 1.0) + 0.1, 1)
+    else:
+        display_mode = "new"
+        version = 1.0
+
     context = {
         "workflow_id": workflow_data["id"],
         "workflow_name": workflow_data["name"],
@@ -118,7 +169,10 @@ def create_workflow_context(workflow_data: dict, domain_info: dict, wf_dir: Path
         "description": workflow_data["description"],
         "domain": domain_info["domain_name"],
         "domain_keywords": domain_info.get("keywords", []),
-        "output_directory": str(wf_dir),
+        "mode": display_mode,
+        "version": version,
+        "composition_date": datetime.now().strftime("%Y-%m-%d"),
+        "search_terms": search_terms,
     }
 
     context_path = wf_dir / "00_metadata" / "workflow_context.json"
@@ -193,6 +247,18 @@ def _get_known_papers(wf_dir: Path) -> set:
     return known
 
 
+def _get_existing_version(wf_dir: Path) -> float | None:
+    """Read version from existing workflow_context.json."""
+    ctx_path = wf_dir / "00_metadata" / "workflow_context.json"
+    if ctx_path.exists():
+        with open(ctx_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        v = data.get("version")
+        if v is not None:
+            return float(v)
+    return None
+
+
 def resolve_and_setup(user_input: str, base_dir: str = ".") -> dict:
     """
     Main entry point: parse input, resolve workflow, create directories, save context.
@@ -219,28 +285,32 @@ def resolve_and_setup(user_input: str, base_dir: str = ".") -> dict:
         wf_dir = mode_info["existing_dir"]
         backup_path = _create_backup(wf_dir)
 
-        # Ensure all subdirs exist (in case of older structure)
         for subdir in ["01_papers/full_texts", "05_visualization", "06_review"]:
             (wf_dir / subdir).mkdir(parents=True, exist_ok=True)
 
         known_papers = _get_known_papers(wf_dir)
+        existing_version = _get_existing_version(wf_dir)
 
-        context = create_workflow_context(workflow_data, domain_info, wf_dir)
-        context["composition_mode"] = "update"
+        context = create_workflow_context(
+            workflow_data, domain_info, wf_dir,
+            mode="update", existing_version=existing_version,
+        )
+        context["backup_path"] = str(backup_path)
         context["update_info"] = {
-            "backup_path": str(backup_path),
             "known_paper_count": len(known_papers),
             "known_papers": list(known_papers),
         }
 
     else:
-        # New mode (includes --fresh: backup first, then create fresh)
-        if mode_info["fresh"] and mode_info["existing_dir"] is not None:
+        fresh = mode_info["fresh"]
+        if fresh and mode_info["existing_dir"] is not None:
             _create_backup(mode_info["existing_dir"])
 
         wf_dir = create_output_directory(workflow_data["id"], workflow_data["name"], base_dir)
-        context = create_workflow_context(workflow_data, domain_info, wf_dir)
-        context["composition_mode"] = "new"
+        context = create_workflow_context(
+            workflow_data, domain_info, wf_dir,
+            mode="new", fresh=fresh,
+        )
 
     return context
 

@@ -1,25 +1,32 @@
 {
   "domain_groups": {
     "Molecular Biology / Cloning": {
-      "workflows": ["WB005", "WB010", "WB020", "WB025", "WB030", "WB040", "WB045", "WB050", "WB060", "WB150"]
+      "workflows": ["WB005", "WB010", "WB020", "WB025", "WB030", "WB040", "WB045", "WB050", "WB060", "WB150"],
+      "keywords": ["cloning", "DNA assembly", "restriction enzyme", "ligation", "transformation", "plasmid", "PCR", "gel electrophoresis", "nucleic acid purification"]
     },
     "Sequencing / NGS": {
-      "workflows": ["WB025", "WT010", "WT012", "WT015"]
+      "workflows": ["WB025", "WT010", "WT012", "WT015"],
+      "keywords": ["next-generation sequencing", "library preparation", "Illumina", "nanopore", "tagmentation", "adapter ligation", "sequencing quality control", "demultiplexing"]
     },
     "Fermentation / Bioprocess": {
-      "workflows": ["WB100", "WT100", "WT110", "WT120", "WT130", "WT140", "WT150", "WT160"]
+      "workflows": ["WB100", "WT100", "WT110", "WT120", "WT130", "WT140", "WT150", "WT160"],
+      "keywords": ["fermentation", "bioreactor", "cell culture", "fed-batch", "continuous culture", "OD measurement", "metabolite analysis", "scale-up", "bioprocess optimization"]
     },
     "Protein Engineering": {
-      "workflows": ["WB070", "WB080", "WB090", "WT020", "WT030", "WT040"]
+      "workflows": ["WB070", "WB080", "WB090", "WT020", "WT030", "WT040"],
+      "keywords": ["protein expression", "protein purification", "directed evolution", "site-directed mutagenesis", "enzyme activity assay", "chromatography", "SDS-PAGE", "mass spectrometry"]
     },
     "Metabolomics / Analytics": {
-      "workflows": ["WT045", "WT046", "WT050", "WT060", "WT070", "WT080", "WT085", "WT090"]
+      "workflows": ["WT045", "WT046", "WT050", "WT060", "WT070", "WT080", "WT085", "WT090"],
+      "keywords": ["metabolomics", "mass spectrometry", "HPLC", "GC-MS", "LC-MS", "NMR spectroscopy", "metabolite quantification", "analytical method", "sample preparation"]
     },
     "Computational / Design": {
-      "workflows": ["WD010", "WD020", "WD030", "WD040", "WD050", "WD060", "WD070", "WD080", "WD090", "WD100", "WD110", "WD120", "WD130", "WL010", "WL020", "WL030", "WL040", "WL050", "WL055", "WL060", "WL070", "WL080", "WL090", "WL100"]
+      "workflows": ["WD010", "WD020", "WD030", "WD040", "WD050", "WD060", "WD070", "WD080", "WD090", "WD100", "WD110", "WD120", "WD130", "WL010", "WL020", "WL030", "WL040", "WL050", "WL055", "WL060", "WL070", "WL080", "WL090", "WL100"],
+      "keywords": ["computational biology", "machine learning", "protein structure prediction", "molecular dynamics", "sequence analysis", "bioinformatics pipeline", "data integration", "design of experiments"]
     },
     "Cell Biology": {
-      "workflows": ["WB110", "WB120", "WB125", "WB130", "WB140"]
+      "workflows": ["WB110", "WB120", "WB125", "WB130", "WB140"],
+      "keywords": ["cell culture", "transfection", "electroporation", "flow cytometry", "cell sorting", "microscopy", "cell viability assay", "gene editing", "CRISPR"]
     }
   },
   "workflow_to_domain": {

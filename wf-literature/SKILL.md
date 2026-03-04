@@ -44,7 +44,11 @@ Pydantic validation replace external skill dependencies for paper details.
 
 ### 2.1 Literature Search — Invoke `scientific-skills:openalex-database`
 
-Search for 10-15 highly relevant papers. Build queries from workflow name + domain keywords from `workflow_context.json`.
+Search for 10-15 highly relevant papers. Build queries from `workflow_context.json` fields in priority order:
+
+1. **`search_terms`** (if non-empty): use directly as primary query terms
+2. **`workflow_name`** + **`domain_keywords`**: combine for secondary/fallback queries
+3. **`search_config.json` technique_templates** (if workflow ID exists): use keywords + synonyms
 
 ```
 Query examples for WB030 "DNA Assembly":
@@ -78,6 +82,22 @@ Features:
 - NCBI API key support (`NCBI_API_KEY` env var)
 - Adaptive retry with circuit breaker on consecutive failures
 - Europe PMC batch limit compliance (max 50 per run)
+
+**MANDATORY — Full Text File Verification**:
+
+After `fetch_fulltext.py` completes, verify that actual `.txt` files exist on disk for every paper with a non-empty PMCID. Do NOT rely solely on the `has_full_text` flag in `paper_list.json`.
+
+```python
+import json, os
+with open(f"{wf_dir}/01_papers/paper_list.json") as f:
+    papers = json.load(f)["papers"]
+pmcid_papers = [p for p in papers if p.get("pmcid", "").strip()]
+missing = [p["paper_id"] for p in pmcid_papers
+           if not os.path.exists(f"{wf_dir}/01_papers/full_texts/{p['paper_id']}.txt")]
+assert len(missing) == 0, f"Full text files missing for: {missing}. Re-run fetch_fulltext.py."
+```
+
+If assertion fails: re-run `fetch_fulltext.py`, then re-verify. Max 2 retries.
 
 ### 2.2.1 Data Validation — Run `scripts/validate_papers.py`
 
@@ -172,6 +192,23 @@ See `references/panel_protocol.md`.
 ```
 
 **Gate**: `accepted_count` >= 3. If not met, return to 2.1 with modified queries.
+
+**MANDATORY — Literature Panel Schema Verification**:
+
+```python
+import json
+with open(f"{wf_dir}/06_review/literature_panel.json") as f:
+    panel = json.load(f)
+assert panel.get("panel_type") == "per_paper_review", "panel_type must be 'per_paper_review'"
+assert "paper_reviews" in panel, "paper_reviews array missing"
+for pr in panel["paper_reviews"]:
+    assert "reviews" in pr, f"Paper {pr.get('paper_id')}: reviews dict missing"
+    for role in ["literature_specialist", "domain_expert", "critical_reviewer"]:
+        assert role in pr["reviews"], f"Paper {pr.get('paper_id')}: {role} review missing"
+    assert pr.get("verdict") in ("accept", "flag_recheck", "reject"), "Invalid verdict"
+```
+
+If assertion fails: regenerate `literature_panel.json` following the per-paper 3-expert schema above. Max 2 retries.
 
 ### 2.5 Case Extraction
 

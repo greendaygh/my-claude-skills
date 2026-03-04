@@ -1,0 +1,69 @@
+{
+  "domain_groups": {
+    "dna_assembly_cloning": {
+      "description": "DNA assembly, cloning, transformation, and related molecular biology workflows",
+      "workflows": ["WB005", "WB010", "WB020", "WB025", "WB030", "WB040", "WB045", "WB050"],
+      "search_keywords": ["DNA assembly", "molecular cloning", "Golden Gate assembly", "Gibson assembly", "restriction enzyme", "ligation", "transformation", "plasmid construction"],
+      "mesh_terms": ["Cloning, Molecular", "DNA, Recombinant", "Plasmids", "Transformation, Bacterial"]
+    },
+    "strain_engineering": {
+      "description": "Strain engineering, genome editing, directed evolution, and pathway construction",
+      "workflows": ["WB060", "WB070", "WB080", "WB090", "WB100", "WB110", "WB120", "WB125"],
+      "search_keywords": ["genome editing", "CRISPR", "metabolic engineering", "directed evolution", "pathway engineering", "strain engineering", "synthetic biology"],
+      "mesh_terms": ["Genetic Engineering", "CRISPR-Cas Systems", "Metabolic Engineering", "Directed Molecular Evolution"]
+    },
+    "cell_culture_fermentation": {
+      "description": "Cell culture, fermentation, protein expression, and bioprocess workflows",
+      "workflows": ["WB130", "WB140", "WB150"],
+      "search_keywords": ["cell culture", "fermentation", "bioreactor", "protein expression", "scale-up", "bioprocess", "high-throughput cultivation"],
+      "mesh_terms": ["Cell Culture Techniques", "Fermentation", "Bioreactors", "Recombinant Proteins"]
+    },
+    "experimental_design": {
+      "description": "Design of experiments, computational design, and media optimization",
+      "workflows": ["WD010", "WD020", "WD030", "WD040", "WD050", "WD060", "WD070", "WD080", "WD090", "WD100", "WD110", "WD120", "WD130"],
+      "search_keywords": ["design of experiments", "laboratory automation", "adaptive evolution", "growth media optimization", "genetic circuit", "vector design", "genome design", "combinatorial library"],
+      "mesh_terms": ["Research Design", "Laboratory Automation", "Synthetic Biology", "Computer-Aided Design"]
+    },
+    "analytical_qc": {
+      "description": "Analytical characterization, quality control, sequencing, and screening",
+      "workflows": ["WT010", "WT012", "WT015", "WT020", "WT030", "WT040", "WT045", "WT046", "WT050"],
+      "search_keywords": ["next-generation sequencing", "PCR verification", "gel electrophoresis", "colony screening", "sequence verification", "quality control", "analytical characterization"],
+      "mesh_terms": ["High-Throughput Nucleotide Sequencing", "Polymerase Chain Reaction", "Electrophoresis, Gel", "Quality Control"]
+    },
+    "phenotype_assay": {
+      "description": "Phenotype assays, functional testing, enzyme activity, growth characterization",
+      "workflows": ["WT060", "WT070", "WT080", "WT085", "WT090", "WT100", "WT110"],
+      "search_keywords": ["enzyme activity assay", "growth characterization", "phenotype screening", "fluorescence assay", "microplate reader", "cell viability", "metabolite detection"],
+      "mesh_terms": ["Phenotype", "Enzyme Assays", "Biological Assay", "High-Throughput Screening Assays"]
+    },
+    "data_analysis_learning": {
+      "description": "Data analysis, machine learning, modeling, and bioinformatics",
+      "workflows": ["WT120", "WT130", "WT140", "WT150", "WT160", "WL010", "WL020", "WL030", "WL040", "WL050", "WL055", "WL060", "WL070", "WL080", "WL090", "WL100"],
+      "search_keywords": ["machine learning", "bioinformatics", "data analysis", "predictive modeling", "design-build-test-learn", "active learning", "automated data pipeline", "computational biology"],
+      "mesh_terms": ["Machine Learning", "Computational Biology", "Bioinformatics", "Data Analysis"]
+    }
+  },
+  "search_settings": {
+    "primary_api": "pubmed",
+    "fallback_api": "openalex",
+    "default_select_n": 10,
+    "pubmed": {
+      "esearch_url": "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi",
+      "efetch_url": "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi",
+      "max_results": 300,
+      "min_date": "2015",
+      "sort": "relevance"
+    },
+    "openalex": {
+      "base_url": "https://api.openalex.org/works",
+      "max_results": 100,
+      "sort": "relevance_score:desc",
+      "polite_email": "wf-paper-mining@biofoundry.org"
+    }
+  },
+  "execution": {
+    "session_budget": 8,
+    "rate_limit_delay_sec": 0.35,
+    "max_retries": 2
+  }
+}

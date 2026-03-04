@@ -3,7 +3,7 @@
 SBLab KRIBB의 Claude Code 커스텀 스킬 모음.
 바이오파운드리 워크플로 구성, 과학 문헌 분석, 스킬 자동 생성 등을 지원합니다.
 
-**Version**: 1.10.1
+**Version**: 1.11.0
 
 ---
 
@@ -30,6 +30,12 @@ workflow-composer (Orchestrator v2.4)
 | **wf-audit** | 2.4.0 | 15-step 감사 (content validation 추가), lenient canonical 모델 (legacy 필드 호환), abstract-title mismatch 탐지 |
 | **wf-migrate** | 2.6.0 | PMID cross-validation 후 merge, full text policy (abstract fallback 금지), 구조화된 섹션 파싱 |
 
+### Paper Mining
+
+| Skill | Version | Description |
+|-------|---------|-------------|
+| **wf-paper-mining** | 1.0.0 | PubMed/OpenAlex 논문 검색, PMC full text 추출, 4-패널 전문가 검증, 7-Component UO 기반 리소스 추출. Thin Controller + RunManifest 아키텍처, 64 워크플로 대상 |
+
 ### Science & Analysis Skills
 
 | Skill | Description |
@@ -53,7 +59,7 @@ workflow-composer (Orchestrator v2.4)
 
 ### Workflow Composer Pipeline
 
-5단계 파이프라인으로 ~37개 표준 워크플로, ~80개 Unit Operation을 구성합니다.
+5단계 파이프라인으로 ~64개 표준 워크플로, ~80개 Unit Operation을 구성합니다.
 
 | Phase | Skill | Input | Output | 핵심 동작 |
 |-------|-------|-------|--------|-----------|
@@ -101,6 +107,10 @@ workflow-composer (Orchestrator v2.4)
 
 # 전체 감사
 /wf-audit
+
+# 워크플로 논문 마이닝 (개별/전체)
+/wf-paper-mining WB030
+/wf-paper-mining --all
 ```
 
 ---
@@ -134,6 +144,13 @@ my-claude-skills/
 │   ├── SKILL.md
 │   ├── CHANGELOG.md
 │   └── scripts/          # workflow_migrator.py, case_migrator.py, audit_fixer.py, variant_migrator.py
+├── wf-paper-mining/         # Workflow Paper Mining & Resource Extraction
+│   ├── SKILL.md
+│   ├── CHANGELOG.md
+│   ├── scripts/          # search_papers.py, fetch_fulltext.py, run_tracker.py, plan_run.py, validate_outputs.py, ...
+│   │   └── models/       # Pydantic v2 models (paper_list, state, extraction, summary, variant, ...)
+│   ├── assets/           # extraction_config.json, panel_configs.json, workflow_catalog.json, uo_catalog.json
+│   └── references/       # extraction_guide.md, panel_protocol.md
 ├── prophage-miner/          # Prophage Literature Mining & Knowledge Graph
 │   ├── SKILL.md
 │   ├── CHANGELOG.md
