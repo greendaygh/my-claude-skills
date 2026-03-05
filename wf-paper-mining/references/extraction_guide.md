@@ -308,7 +308,7 @@ echo '<JSON>' | python -m scripts.extract_resources save \
 ```
 
 - stdin으로 JSON 전달
-- 저장 경로: `{output_dir}/{paper_id}_extraction.json`
+- 저장 경로: `{output_dir}/{paper_id}_{workflow_id}.json`
 - 저장 시 자동으로 Pydantic 검증 수행
 
 ### 검증 명령

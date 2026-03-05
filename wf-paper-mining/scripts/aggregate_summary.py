@@ -13,9 +13,16 @@ from .models.variant import UoComposition, UoStep, VariantDefinition
 from .models.state import RunRegistry
 
 
-def _load_extractions(input_dir: Path) -> list[ExtractionResult]:
+def _glob_extractions(input_dir: Path, workflow_id: str) -> list[Path]:
+    new_pattern = f"*_{workflow_id}.json"
+    legacy_pattern = "*_extraction.json"
+    found = set(input_dir.glob(new_pattern)) | set(input_dir.glob(legacy_pattern))
+    return sorted(found)
+
+
+def _load_extractions(input_dir: Path, workflow_id: str) -> list[ExtractionResult]:
     results: list[ExtractionResult] = []
-    for p in sorted(input_dir.glob("*_extraction.json")):
+    for p in _glob_extractions(input_dir, workflow_id):
         try:
             data = json.loads(p.read_text(encoding="utf-8"))
             results.append(ExtractionResult.model_validate(data))
@@ -219,7 +226,7 @@ def main() -> None:
     wf = registry.workflows.get(args.workflow_id)
     paper_status = wf.paper_status if wf else {}
 
-    all_extractions = _load_extractions(args.input)
+    all_extractions = _load_extractions(args.input, args.workflow_id)
     accepted = [e for e in all_extractions if _accept_extraction(e.paper_id, paper_status)]
 
     resource, new_catalog_list = _aggregate(accepted, args.workflow_id)

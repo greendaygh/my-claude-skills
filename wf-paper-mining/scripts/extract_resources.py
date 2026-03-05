@@ -14,10 +14,17 @@ from pydantic import ValidationError
 from .models.extraction import ExtractionResult
 
 
+def _glob_extractions(input_dir: Path, workflow_id: str) -> list[Path]:
+    new_pattern = f"*_{workflow_id}.json"
+    legacy_pattern = "*_extraction.json"
+    found = set(input_dir.glob(new_pattern)) | set(input_dir.glob(legacy_pattern))
+    return sorted(found)
+
+
 def _cmd_save(paper_id: str, workflow_id: str, output_dir: Path) -> None:
     data = json.load(sys.stdin)
     ExtractionResult.model_validate(data)
-    out_path = output_dir / f"{paper_id}_extraction.json"
+    out_path = output_dir / f"{paper_id}_{workflow_id}.json"
     out_path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(dir=out_path.parent, prefix=".tmp_", suffix=".json")
     try:
@@ -55,7 +62,7 @@ def _cmd_summary(input_dir: Path, workflow_id: str) -> None:
         "new_uo_candidates": 0,
         "papers": 0,
     }
-    for p in sorted(input_dir.glob("*_extraction.json")):
+    for p in _glob_extractions(input_dir, workflow_id):
         try:
             data = json.loads(p.read_text(encoding="utf-8"))
             ExtractionResult.model_validate(data)

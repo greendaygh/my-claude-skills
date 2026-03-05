@@ -1,5 +1,17 @@
 # Changelog — wf-paper-mining
 
+## [1.0.1] — 2026-03-05
+
+### Fixed
+- **추출 파일 명명 표준화**: 저장 파일명을 `{paper_id}_extraction.json` → `{paper_id}_{workflow_id}.json`으로 통일 (SKILL.md Phase 4와 일치). `extract_resources save` 및 `aggregate_summary`가 새 형식 사용.
+- **하위 호환**: `extract_resources summary`와 `aggregate_summary`는 `*_{workflow_id}.json`과 기존 `*_extraction.json` 이중 패턴을 모두 로드.
+- **plan_run extraction_guide**: `file_paths.extraction_guide`를 `extraction_template.json`(스키마)에서 `uo_catalog.json`(UO 카탈로그)으로 변경. Panel A/B 프롬프트의 "UO 카탈로그" 참조가 올바른 파일을 가리키도록 수정.
+
+### Documentation
+- `references/extraction_guide.md`: 저장 경로 설명을 `{paper_id}_{workflow_id}.json`으로 갱신.
+
+---
+
 ## [1.0.0] — 2026-03-04
 
 ### Added

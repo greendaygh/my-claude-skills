@@ -1,5 +1,4 @@
 from __future__ import annotations
-from typing import Literal
 from pydantic import field_validator
 from .base import StrictModel, FlexModel
 
@@ -100,7 +99,7 @@ class SampleEntry(FlexModel):
 class UoConnection(FlexModel):
     from_uo: str
     to_uo: str
-    transfer_type: Literal["sample", "data", "control_signal"] = "sample"
+    transfer_type: str = "sample"
     transfer_object: str = ""
     confidence: float = 0.0
 

@@ -521,6 +521,48 @@ def main() -> None:
         papers=papers,
     )
 
+    # --- Guard: DOI overlap with existing paper_lists (exclude current run) ---
+    existing_dois = set()
+    for f in papers_dir.glob("paper_list_*.json"):
+        if f.name == f"paper_list_{args.run_id}.json":
+            continue
+        try:
+            data = json.loads(f.read_text())
+            for p in data.get("papers", []):
+                doi = p.get("doi", "")
+                if doi:
+                    existing_dois.add(_norm_doi(doi))
+        except Exception:
+            continue
+    overlap = [p for p in papers if p.doi and _norm_doi(p.doi) in existing_dois]
+    if overlap:
+        print(
+            f"[search] ERROR: {len(overlap)} papers overlap with existing paper_lists",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    # --- Guard: paper_id collision with existing paper_lists ---
+    existing_ids: set[str] = set()
+    for f in papers_dir.glob("paper_list_*.json"):
+        if f.name == f"paper_list_{args.run_id}.json":
+            continue
+        try:
+            data = json.loads(f.read_text())
+            for p in data.get("papers", []):
+                pid = p.get("paper_id", "")
+                if pid:
+                    existing_ids.add(pid)
+        except Exception:
+            continue
+    for p in papers:
+        if p.paper_id in existing_ids:
+            print(
+                f"[search] ERROR: paper_id {p.paper_id} already exists",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
     paper_list_path = papers_dir / f"paper_list_{args.run_id}.json"
     paper_list_path.write_text(paper_list.model_dump_json(indent=2))
 

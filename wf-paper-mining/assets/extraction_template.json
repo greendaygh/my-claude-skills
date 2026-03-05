@@ -122,6 +122,10 @@
     "Mark is_new=true for UOs not found in uo_catalog.json",
     "Include confidence scores based on how explicitly the information is stated",
     "Note the source_section (METHODS, RESULTS, etc.) for traceability",
-    "Look for workflow variants: different combinations of UOs for the same workflow"
+    "Look for workflow variants: different combinations of UOs for the same workflow",
+    "Extract upstream workflows (steps performed before the target workflow) if described in the paper, e.g. strain construction, media preparation, sample preprocessing, transformation",
+    "Extract downstream workflows (steps performed after the target workflow) if described in the paper, e.g. purification, analytics, quality verification, scale-up",
+    "Include all identified upstream/downstream workflows in the workflows array with appropriate confidence scores reflecting how extensively the paper describes them",
+    "Record inter-workflow connections in uo_connections to capture the sequential or data-flow relationships between upstream, target, and downstream workflows"
   ]
 }

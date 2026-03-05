@@ -64,7 +64,7 @@ def _collect_pending(tracker: RunTracker, wf_id: str) -> tuple[list[str], list[s
 
 def _build_file_paths(assets_dir: Path, wf_output_dir: Path) -> FilePaths:
     return FilePaths(
-        extraction_guide=str(assets_dir / "extraction_template.json"),
+        extraction_guide=str(assets_dir / "uo_catalog.json"),
         panel_protocol=str(assets_dir / "panel_configs.json"),
         extraction_template=str(assets_dir / "extraction_template.json"),
         panel_configs=str(assets_dir / "panel_configs.json"),

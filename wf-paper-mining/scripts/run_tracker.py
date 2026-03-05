@@ -175,7 +175,7 @@ class RunTracker:
     def apply_verdicts_from_file(self, wf_id: str, result_path: Path) -> dict:
         """Apply verdicts from a run_result JSON file."""
         data = json.loads(result_path.read_text())
-        verdicts = data.get("verdicts", {})
+        verdicts = data.get("verdicts", data.get("final_verdicts", {}))
         for paper_id, verdict_info in verdicts.items():
             if isinstance(verdict_info, str):
                 self.apply_verdict(wf_id, paper_id, verdict_info)
