@@ -42,10 +42,6 @@ def _get_uo_candidates(uo_catalog: dict) -> list[str]:
     return sorted(uo_catalog.get("unit_operations", {}).keys())
 
 
-def _panel_a_cached(wf_output_dir: Path) -> bool:
-    return (wf_output_dir / "reviews" / "panel_A_uo_candidates.json").exists()
-
-
 def _collect_pending(tracker: RunTracker, wf_id: str) -> tuple[list[str], list[str]]:
     """Split into pending_papers (need fetch) and pending_extractions (need extract)."""
     wf = tracker._registry.workflows.get(wf_id)
@@ -92,17 +88,14 @@ def _build_skip_manifest(
         action="skip",
         reason=reason,
         phases=PhaseConfig(
-            phase1_resolve=False,
             phase2_search=False,
             phase3_fetch=False,
             phase4_extract=False,
             phase4_5_aggregate=False,
         ),
         panels=PanelConfig(
-            panel_a=skip_panel,
             panel_b=skip_panel,
             panel_c=skip_panel,
-            panel_d=skip_panel,
         ),
         file_paths=file_paths,
         session_context=session_context,
@@ -156,11 +149,7 @@ def plan_run(
     saturation_action = exec_info.get("saturation_action", "search")
     is_saturated = saturation_action == "skip"
 
-    has_panel_a_cache = _panel_a_cached(wf_output_dir)
-    run_panel_a = is_first_run and not has_panel_a_cache
-
     phases = PhaseConfig(
-        phase1_resolve=is_first_run and not has_panel_a_cache,
         phase2_search=not is_saturated,
         phase3_fetch=not is_saturated,
         phase4_extract=not is_saturated,
@@ -168,11 +157,6 @@ def plan_run(
     )
 
     panels = PanelConfig(
-        panel_a=PanelDecision(
-            run=run_panel_a,
-            mode="full" if run_panel_a else "skip",
-            reason="first_run" if run_panel_a else "cached",
-        ),
         panel_b=PanelDecision(
             run=not is_saturated,
             mode=panel_mode if not is_saturated else "skip",
@@ -182,11 +166,6 @@ def plan_run(
             run=not is_saturated,
             mode=panel_mode if not is_saturated else "skip",
             reason="new_extractions" if not is_saturated else "saturated",
-        ),
-        panel_d=PanelDecision(
-            run=False,
-            mode=panel_mode,
-            reason="deferred_until_aggregate",
         ),
     )
 

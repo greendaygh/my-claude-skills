@@ -162,8 +162,11 @@ def process_papers(
             continue
 
         if pending_only and paper.get("has_full_text", False):
-            stats["skipped"] += 1
-            continue
+            # Only skip if the file actually exists on disk
+            ft_path = output_dir / "01_papers" / "full_texts" / f"{paper['paper_id']}.txt"
+            if ft_path.exists():
+                stats["skipped"] += 1
+                continue
 
         pmcid = paper.get("pmcid")
         if not pmcid:

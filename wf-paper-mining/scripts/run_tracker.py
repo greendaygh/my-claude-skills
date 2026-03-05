@@ -82,8 +82,13 @@ class RunTracker:
                      papers_searched: int = 0, papers_selected: int = 0,
                      papers_accepted: int = 0, new_extractions: int = 0,
                      new_variants: int = 0, panels_run: list[str] | None = None,
-                     panel_mode: str = "full") -> dict:
+                     panel_mode: str = "full",
+                     domain: str = "") -> dict:
         wf = self._ensure_workflow(wf_id)
+        if domain and not wf.domain:
+            wf.domain = domain
+        # Prevent duplicate run entries
+        wf.runs = [r for r in wf.runs if r.run_id != run_id]
         record = RunRecord(
             run_id=run_id,
             run_date=datetime.now(timezone.utc).isoformat(),
@@ -96,6 +101,14 @@ class RunTracker:
             panel_mode=panel_mode,
         )
         wf.runs.append(record)
+        self._registry.global_stats.total_runs = sum(
+            len(w.runs) for w in self._registry.workflows.values()
+        )
+        self._registry.global_stats.total_extracted = sum(
+            1 for w in self._registry.workflows.values()
+            for ps in w.paper_status.values()
+            if ps.status == "extracted"
+        )
         self._save()
         return record.model_dump()
 
@@ -176,6 +189,14 @@ class RunTracker:
         """Apply verdicts from a run_result JSON file."""
         data = json.loads(result_path.read_text())
         verdicts = data.get("verdicts", data.get("final_verdicts", {}))
+        # Handle Panel B output format: {"papers": [{"paper_id": ..., "verdict": ...}]}
+        if not verdicts:
+            items = data.get("papers", data.get("reviews", []))
+            if items:
+                verdicts = {
+                    p["paper_id"]: p.get("verdict", p.get("panel_b_verdict", "accept"))
+                    for p in items if "paper_id" in p
+                }
         for paper_id, verdict_info in verdicts.items():
             if isinstance(verdict_info, str):
                 self.apply_verdict(wf_id, paper_id, verdict_info)
@@ -339,6 +360,7 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--new-variants", type=int, default=0)
     p.add_argument("--panels-run", default="")
     p.add_argument("--panel-mode", default="full")
+    p.add_argument("--domain", default="")
     p.add_argument("--registry", required=True)
 
     p = sub.add_parser("summary")
@@ -392,6 +414,7 @@ def main() -> None:
             new_variants=args.new_variants,
             panels_run=panels,
             panel_mode=args.panel_mode,
+            domain=getattr(args, "domain", ""),
         )
 
     elif args.command == "summary":

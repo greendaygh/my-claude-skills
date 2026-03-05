@@ -7,7 +7,6 @@ from .base import StrictModel
 
 
 class PhaseConfig(StrictModel):
-    phase1_resolve: bool
     phase2_search: bool
     phase3_fetch: bool
     phase4_extract: bool
@@ -21,10 +20,8 @@ class PanelDecision(StrictModel):
 
 
 class PanelConfig(StrictModel):
-    panel_a: PanelDecision
     panel_b: PanelDecision
     panel_c: PanelDecision
-    panel_d: PanelDecision
 
 
 class SearchConfig(StrictModel):

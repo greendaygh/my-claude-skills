@@ -40,7 +40,8 @@ OPENALEX_POLITE_EMAIL = "wf-paper-mining@biofoundry.org"
 
 AUTOMATION_TERMS = (
     "automated OR high-throughput OR biofoundry "
-    "OR 'laboratory automation' OR robotic"
+    "OR 'laboratory automation' "
+    "OR (robotic AND (liquid handling OR plate reader OR pipetting OR microplate OR assay))"
 )
 
 
@@ -66,11 +67,11 @@ def _build_pubmed_query(
         parts.append(f"({kw_part})")
 
     base = " OR ".join(parts) if parts else "biofoundry"
-    return f"({base}) AND (automated OR high-throughput OR biofoundry OR robotic)"
+    return f"({base}) AND ({AUTOMATION_TERMS})"
 
 
-def _search_pubmed(query: str, max_results: int = 300) -> tuple[list[str], int]:
-    """Search PubMed via esearch. Returns (pmid_list, total_count)."""
+def _search_pubmed(query: str, max_results: int = 300, max_retries: int = 3) -> tuple[list[str], int]:
+    """Search PubMed via esearch with retry. Returns (pmid_list, total_count)."""
     params = {
         "db": "pubmed",
         "term": query,
@@ -82,33 +83,54 @@ def _search_pubmed(query: str, max_results: int = 300) -> tuple[list[str], int]:
         "maxdate": str(date.today().year),
     }
     print(f"[search] PubMed query: {query[:80]}...", file=sys.stderr)
-    time.sleep(RATE_LIMIT_DELAY)
-    resp = requests.get(PUBMED_ESEARCH, params=params, timeout=30)
-    resp.raise_for_status()
+    for attempt in range(1, max_retries + 1):
+        try:
+            time.sleep(RATE_LIMIT_DELAY * attempt)
+            resp = requests.get(PUBMED_ESEARCH, params=params, timeout=60)
+            resp.raise_for_status()
+            root = ET.fromstring(resp.text)
+            total = int(root.findtext("Count", "0"))
+            pmids = [el.text for el in root.findall(".//IdList/Id") if el.text]
+            print(f"[search] PubMed: {total} total, {len(pmids)} retrieved", file=sys.stderr)
+            return pmids, total
+        except (requests.exceptions.RequestException, ET.ParseError) as exc:
+            print(f"[search] esearch attempt {attempt}/{max_retries} failed: {exc}", file=sys.stderr)
+            if attempt == max_retries:
+                raise
+            time.sleep(3 * attempt)
+    return [], 0
 
-    root = ET.fromstring(resp.text)
-    total = int(root.findtext("Count", "0"))
-    pmids = [el.text for el in root.findall(".//IdList/Id") if el.text]
-    print(f"[search] PubMed: {total} total, {len(pmids)} retrieved", file=sys.stderr)
-    return pmids, total
 
-
-def _fetch_pubmed_metadata(pmids: list[str]) -> list[dict]:
-    """Fetch metadata for PMIDs from PubMed efetch."""
+def _fetch_pubmed_metadata(pmids: list[str], batch_size: int = 50, max_retries: int = 3) -> list[dict]:
+    """Fetch metadata for PMIDs from PubMed efetch in batches."""
     if not pmids:
         return []
-    print(f"[search] Fetching PubMed metadata for {len(pmids)} papers...", file=sys.stderr)
-    time.sleep(RATE_LIMIT_DELAY)
-    resp = requests.get(
-        PUBMED_EFETCH,
-        params={"db": "pubmed", "id": ",".join(pmids), "retmode": "xml"},
-        timeout=30,
-    )
-    resp.raise_for_status()
+    print(f"[search] Fetching PubMed metadata for {len(pmids)} papers (batch_size={batch_size})...", file=sys.stderr)
 
-    root = ET.fromstring(resp.text)
+    all_articles = []
+    for i in range(0, len(pmids), batch_size):
+        batch = pmids[i : i + batch_size]
+        print(f"[search]   batch {i // batch_size + 1}: PMIDs {i+1}-{i+len(batch)}", file=sys.stderr)
+        for attempt in range(1, max_retries + 1):
+            try:
+                time.sleep(RATE_LIMIT_DELAY)
+                resp = requests.get(
+                    PUBMED_EFETCH,
+                    params={"db": "pubmed", "id": ",".join(batch), "retmode": "xml"},
+                    timeout=60,
+                )
+                resp.raise_for_status()
+                batch_root = ET.fromstring(resp.text)
+                all_articles.extend(batch_root.findall(".//PubmedArticle"))
+                break
+            except (requests.exceptions.RequestException, ET.ParseError) as exc:
+                print(f"[search]   attempt {attempt}/{max_retries} failed: {exc}", file=sys.stderr)
+                if attempt == max_retries:
+                    print(f"[search]   skipping batch after {max_retries} failures", file=sys.stderr)
+                time.sleep(2 * attempt)
+
     results: list[dict] = []
-    for article in root.findall(".//PubmedArticle"):
+    for article in all_articles:
         citation = article.find("MedlineCitation")
         if citation is None:
             continue
@@ -406,9 +428,10 @@ def main() -> None:
     if args.exclude_file and args.exclude_file.exists():
         try:
             reg = json.loads(args.exclude_file.read_text())
-            wf_entry = reg.get("workflows", {}).get(args.workflow_id, {})
-            for d in wf_entry.get("known_dois", []):
-                known_dois.add(_norm_doi(d))
+            # Exclude DOIs from ALL workflows to avoid cross-workflow duplication
+            for wf_id_key, wf_entry in reg.get("workflows", {}).items():
+                for d in wf_entry.get("known_dois", []):
+                    known_dois.add(_norm_doi(d))
         except Exception:
             pass
 
@@ -427,19 +450,44 @@ def main() -> None:
     new_pmids = [p for p in pmids if p not in known_pmids]
     if args.seed:
         random.seed(args.seed)
-    selected_pmids = (
-        random.sample(new_pmids, min(args.select_n, len(new_pmids)))
-        if len(new_pmids) > args.select_n
+
+    # Fetch metadata for a larger batch to identify papers with PMCIDs,
+    # then prioritize those with full text available.
+    SCAN_BATCH = min(200, len(new_pmids))  # PubMed efetch limit per request
+    scan_pmids = (
+        random.sample(new_pmids, SCAN_BATCH)
+        if len(new_pmids) > SCAN_BATCH
         else new_pmids
     )
 
-    pubmed_papers: list[dict] = []
-    if selected_pmids:
-        pubmed_papers = _fetch_pubmed_metadata(selected_pmids)
-        pubmed_papers = [
-            p for p in pubmed_papers
+    all_meta: list[dict] = []
+    if scan_pmids:
+        all_meta = _fetch_pubmed_metadata(scan_pmids)
+        all_meta = [
+            p for p in all_meta
             if _norm_doi(p.get("doi", "")) not in known_dois or not p.get("doi")
         ]
+
+    # Split into papers with and without PMCIDs
+    with_pmcid = [p for p in all_meta if p.get("pmcid")]
+    without_pmcid = [p for p in all_meta if not p.get("pmcid")]
+
+    print(
+        f"[search] Scanned {len(all_meta)} papers: {len(with_pmcid)} with PMCID, {len(without_pmcid)} without",
+        file=sys.stderr,
+    )
+
+    # Select: prioritize papers with PMCIDs, fill remainder without
+    if len(with_pmcid) >= args.select_n:
+        pubmed_papers = random.sample(with_pmcid, args.select_n)
+    else:
+        need_more_no_pmc = args.select_n - len(with_pmcid)
+        fill = (
+            random.sample(without_pmcid, min(need_more_no_pmc, len(without_pmcid)))
+            if len(without_pmcid) > need_more_no_pmc
+            else without_pmcid
+        )
+        pubmed_papers = with_pmcid + fill
 
     print(
         f"[search] PubMed: {len(pubmed_papers)} new papers after dedup",

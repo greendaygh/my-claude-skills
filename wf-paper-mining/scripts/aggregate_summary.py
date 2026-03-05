@@ -20,11 +20,56 @@ def _glob_extractions(input_dir: Path, workflow_id: str) -> list[Path]:
     return sorted(found)
 
 
+def _normalize_extraction(data: dict) -> dict:
+    """Normalize common LLM field-name variations to match ExtractionResult schema."""
+    alias_map_list = {
+        "workflows": {"workflow_id": "catalog_id", "workflow_name": "name"},
+        "hardware_uos": {"uo_id": "catalog_id", "uo_name": "name"},
+        "software_uos": {"uo_id": "catalog_id", "uo_name": "name"},
+    }
+    for field, renames in alias_map_list.items():
+        for item in data.get(field, []):
+            for old_key, new_key in renames.items():
+                if old_key in item and new_key not in item:
+                    item[new_key] = item.pop(old_key)
+
+    conn_renames = {"from": "from_uo", "to": "to_uo", "transferred": "transfer_object"}
+    for conn in data.get("uo_connections", []):
+        for old_key, new_key in conn_renames.items():
+            if old_key in conn and new_key not in conn:
+                conn[new_key] = conn.pop(old_key)
+
+    for qc in data.get("qc_checkpoints", []):
+        for alias in ("checkpoint_id", "step", "checkpoint_name"):
+            if alias in qc and "name" not in qc:
+                qc["name"] = qc.pop(alias)
+                break
+
+    # Normalize confidence: string labels -> float
+    confidence_map = {"high": 0.9, "medium": 0.6, "low": 0.3, "very high": 0.95, "very low": 0.1}
+    for field in ("workflows", "hardware_uos", "software_uos", "equipment",
+                  "consumables", "reagents", "samples", "uo_connections", "qc_checkpoints"):
+        for item in data.get(field, []):
+            if "confidence" in item and isinstance(item["confidence"], str):
+                item["confidence"] = confidence_map.get(item["confidence"].lower(), 0.5)
+
+    # Flatten dict parameters to string
+    for field in ("hardware_uos", "software_uos"):
+        for item in data.get(field, []):
+            for k in ("parameters", "equipment", "consumables", "input", "output",
+                       "material_and_method", "result", "discussion", "method", "environment"):
+                if k in item and isinstance(item[k], (dict, list)):
+                    item[k] = json.dumps(item[k], ensure_ascii=False)
+
+    return data
+
+
 def _load_extractions(input_dir: Path, workflow_id: str) -> list[ExtractionResult]:
     results: list[ExtractionResult] = []
     for p in _glob_extractions(input_dir, workflow_id):
         try:
             data = json.loads(p.read_text(encoding="utf-8"))
+            data = _normalize_extraction(data)
             results.append(ExtractionResult.model_validate(data))
         except Exception:
             pass
