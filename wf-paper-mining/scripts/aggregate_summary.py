@@ -10,7 +10,7 @@ from pathlib import Path
 from .models.extraction import ExtractionResult
 from .models.summary import FrequencyItem, ResourceSummary, UoSummary, VariantSummary
 from .models.variant import UoComposition, UoStep, VariantDefinition
-from .models.state import RunRegistry
+from .models.state import WorkflowState
 
 
 def _glob_extractions(input_dir: Path, workflow_id: str) -> list[Path]:
@@ -263,14 +263,22 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
-    parser.add_argument("--registry", required=True, type=Path)
+    g = parser.add_mutually_exclusive_group(required=True)
+    g.add_argument("--root-dir", type=Path, help="Root directory (v2)")
+    g.add_argument("--registry", type=Path, help="Legacy registry file path")
     parser.add_argument("--workflow-id", required=True)
     args = parser.parse_args()
 
-    registry_data = json.loads(args.registry.read_text(encoding="utf-8"))
-    registry = RunRegistry.model_validate(registry_data)
-    wf = registry.workflows.get(args.workflow_id)
-    paper_status = wf.paper_status if wf else {}
+    if args.root_dir:
+        state_path = args.root_dir / args.workflow_id / "wf_state.json"
+    else:
+        state_path = args.registry.expanduser().resolve().parent / args.workflow_id / "wf_state.json"
+
+    if state_path.exists():
+        ws = WorkflowState.model_validate(json.loads(state_path.read_text(encoding="utf-8")))
+        paper_status = ws.paper_status
+    else:
+        paper_status = {}
 
     all_extractions = _load_extractions(args.input, args.workflow_id)
     accepted = [e for e in all_extractions if _accept_extraction(e.paper_id, paper_status)]

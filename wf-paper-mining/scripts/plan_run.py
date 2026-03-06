@@ -3,7 +3,7 @@
 CLI:
     python -m scripts.plan_run \
       --wf-id WB030 \
-      --registry ~/dev/wf-mining/run_registry.json \
+      --root-dir ~/dev/wf-mining \
       --assets ~/.claude/skills/wf-paper-mining/assets \
       --output ~/dev/wf-mining/WB030/runs/
 
@@ -41,17 +41,14 @@ def _get_uo_candidates(uo_catalog: dict) -> list[str]:
     return sorted(uo_catalog.get("unit_operations", {}).keys())
 
 
-def _collect_pending(tracker: RunTracker, wf_id: str) -> tuple[list[str], list[str]]:
+def _collect_pending(tracker: RunTracker) -> tuple[list[str], list[str]]:
     """Split into pending_papers (need fetch) and pending_extractions (need extract)."""
-    wf = tracker._registry.workflows.get(wf_id)
-    if not wf:
-        return [], []
     pending_papers = [
-        pid for pid, ps in wf.paper_status.items()
+        pid for pid, ps in tracker._state.paper_status.items()
         if ps.status == "pending"
     ]
     pending_extractions = [
-        pid for pid, ps in wf.paper_status.items()
+        pid for pid, ps in tracker._state.paper_status.items()
         if ps.status == "fetched"
     ]
     return pending_papers, pending_extractions
@@ -103,13 +100,13 @@ def _build_skip_manifest(
 
 def plan_run(
     wf_id: str,
-    registry_path: Path,
+    root_dir: Path,
     assets_dir: Path,
     output_dir: Path,
 ) -> Path:
-    tracker = RunTracker(registry_path)
+    tracker = RunTracker(root_dir, wf_id)
 
-    exec_info = tracker.determine_execution(wf_id)
+    exec_info = tracker.determine_execution()
     action = exec_info["action"]
     is_first_run = exec_info.get("is_first_run", False)
     run_count = exec_info.get("run_count", 0)
@@ -144,7 +141,7 @@ def plan_run(
         manifest_path.write_text(manifest.model_dump_json(indent=2))
         return manifest_path
 
-    panel_mode = tracker.determine_panel_mode(wf_id)
+    panel_mode = tracker.determine_panel_mode()
     saturation_action = exec_info.get("saturation_action", "search")
     is_saturated = saturation_action == "skip"
 
@@ -168,11 +165,11 @@ def plan_run(
         ),
     )
 
-    pending_papers, pending_extractions = _collect_pending(tracker, wf_id)
+    pending_papers, pending_extractions = _collect_pending(tracker)
 
     search_settings = extraction_config.get("search_settings", {})
     search_config = SearchConfig(
-        exclude_dois=tracker.get_known_dois(wf_id),
+        exclude_dois=tracker.get_known_dois(),
         select_n=search_settings.get("default_select_n", 10),
         seed=_generate_seed(),
     )
@@ -200,14 +197,21 @@ def main() -> None:
         description="Generate a deterministic RunManifest for the executor agent.",
     )
     parser.add_argument("--wf-id", required=True)
-    parser.add_argument("--registry", required=True)
+    g = parser.add_mutually_exclusive_group(required=True)
+    g.add_argument("--root-dir", help="Root directory (v2)")
+    g.add_argument("--registry", help="Legacy registry file path (auto-detects root)")
     parser.add_argument("--assets", required=True)
     parser.add_argument("--output", required=True)
     args = parser.parse_args()
 
+    if args.root_dir:
+        root = Path(args.root_dir).expanduser().resolve()
+    else:
+        root = Path(args.registry).expanduser().resolve().parent
+
     manifest_path = plan_run(
         wf_id=args.wf_id,
-        registry_path=Path(args.registry).expanduser().resolve(),
+        root_dir=root,
         assets_dir=Path(args.assets).expanduser().resolve(),
         output_dir=Path(args.output).expanduser().resolve(),
     )

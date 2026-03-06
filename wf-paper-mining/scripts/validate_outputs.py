@@ -18,7 +18,7 @@ from pydantic import ValidationError
 from .models.paper_list import MiningPaperList
 from .models.extraction import ExtractionResult
 from .models.summary import ResourceSummary, VariantSummary
-from .models.state import RunRegistry
+from .models.state import WorkflowState, RegistryIndex
 from .models.base import DetailedViolation
 
 
@@ -198,9 +198,13 @@ def _run_all(output_dir: Path, verbose: bool = False) -> list[DetailedViolation]
             variant_file = summaries_dir / "variant_summary.json"
         _validate_file(variant_file, VariantSummary, violations, verbose)
 
-    registry_file = output_dir.parent / "run_registry.json"
-    if registry_file.exists():
-        _validate_file(registry_file, RunRegistry, violations, verbose)
+    state_file = output_dir / "wf_state.json"
+    if state_file.exists():
+        _validate_file(state_file, WorkflowState, violations, verbose)
+
+    index_file = output_dir.parent / "registry_index.json"
+    if index_file.exists():
+        _validate_file(index_file, RegistryIndex, violations, verbose)
 
     return violations
 

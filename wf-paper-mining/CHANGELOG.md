@@ -1,5 +1,25 @@
 # Changelog — wf-paper-mining
 
+## [2.0.0] — 2026-03-07
+
+### Changed
+- **Per-workflow state files** — 단일 `run_registry.json` → 워크플로별 `{WF_ID}/wf_state.json` + 경량 `registry_index.json`으로 분리. 워크플로 수 증가에도 I/O 부담 없음
+- **RunTracker v2 API** — `RunTracker(registry_path)` → `RunTracker(root_dir, wf_id)`. 모든 메서드에서 `wf_id` 파라미터 제거 (인스턴스에 바인딩)
+- **Atomic file writes** — `tempfile + os.replace` 패턴으로 상태 파일 손상 방지
+- **Batched verdict save** — `apply_verdicts_from_file()`에서 verdict당 개별 저장 대신 단일 `_save()` 호출
+- **CLI args** — 모든 스크립트에서 `--registry` → `--root-dir` (v2). `--registry`는 legacy 폴백으로 유지
+- **aggregate_summary** — `RunRegistry` 대신 `WorkflowState` 직접 로드
+- **validate_outputs** — `run_registry.json` 대신 `wf_state.json` + `registry_index.json` 검증
+- **SKILL.md** — 모든 CLI 예시에서 `$REGISTRY` 제거, `--root-dir $ROOT_DIR` 사용. 디렉토리 구조에 `wf_state.json` 반영
+
+### Added
+- `WorkflowState` — 워크플로별 상태 Pydantic 모델 (DOI 커버리지 + run_id 참조 검증)
+- `WorkflowIndexEntry` / `RegistryIndex` — 경량 글로벌 인덱스 모델 (extracted_count ≤ paper_count 검증)
+- `migrate_registry.py` — legacy `run_registry.json` → per-workflow 파일 변환 스크립트 (백업 자동 생성)
+- Legacy fallback — `RunTracker(root_dir, wf_id, legacy_registry=Path)`로 기존 데이터 자동 감지/로드
+
+---
+
 ## [1.0.2] — 2026-03-06
 
 ### Changed

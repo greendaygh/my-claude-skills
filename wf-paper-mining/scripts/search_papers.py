@@ -14,7 +14,7 @@ CLI:
         --config assets/extraction_config.json \
         --assets assets/ \
         --output ~/dev/wf-mining/WB030 \
-        --exclude-file ~/dev/wf-mining/run_registry.json \
+        --root-dir ~/dev/wf-mining \
         --select-n 10 \
         --seed 42
 """
@@ -426,8 +426,10 @@ def main() -> None:
                         help="Path to assets directory (has workflow_catalog.json)")
     parser.add_argument("--output", type=Path, required=True,
                         help="Workflow output directory (e.g. ~/dev/wf-mining/WB030)")
+    parser.add_argument("--root-dir", type=Path, default=None,
+                        help="Root directory for DOI exclusion (v2)")
     parser.add_argument("--exclude-file", type=Path, default=None,
-                        help="run_registry.json for DOI exclusion")
+                        help="Legacy: run_registry.json for DOI exclusion")
     parser.add_argument("--select-n", type=int, default=10)
     parser.add_argument("--seed", type=int, default=None)
     args = parser.parse_args()
@@ -456,10 +458,17 @@ def main() -> None:
     known_dois: set[str] = set()
     known_pmids: set[str] = set()
 
-    if args.exclude_file and args.exclude_file.exists():
+    if args.root_dir and args.root_dir.exists():
+        try:
+            from .run_tracker import RunTracker
+            tracker = RunTracker(args.root_dir.expanduser().resolve(), args.workflow_id)
+            for d in tracker.get_known_dois():
+                known_dois.add(_norm_doi(d))
+        except Exception:
+            pass
+    elif args.exclude_file and args.exclude_file.exists():
         try:
             reg = json.loads(args.exclude_file.read_text())
-            # Exclude DOIs from ALL workflows to avoid cross-workflow duplication
             for wf_id_key, wf_entry in reg.get("workflows", {}).items():
                 for d in wf_entry.get("known_dois", []):
                     known_dois.add(_norm_doi(d))
@@ -651,19 +660,20 @@ def main() -> None:
         file=sys.stderr,
     )
 
-    # --- Sync to run_registry ---
-    if args.exclude_file:
+    # --- Sync to state ---
+    root_dir = args.root_dir or (args.exclude_file.expanduser().resolve().parent if args.exclude_file else None)
+    if root_dir:
         try:
             from .run_tracker import RunTracker
-            tracker = RunTracker(args.exclude_file.expanduser().resolve())
+            legacy = args.exclude_file.expanduser().resolve() if args.exclude_file and not args.root_dir else None
+            tracker = RunTracker(root_dir, args.workflow_id, legacy_registry=legacy)
             tracker.add_papers(
-                args.workflow_id,
                 args.run_id,
                 [{"paper_id": p.paper_id, "doi": p.doi or ""} for p in papers],
             )
-            print("[search] Synced DOIs to run_registry", file=sys.stderr)
+            print("[search] Synced DOIs to wf_state", file=sys.stderr)
         except Exception as e:
-            print(f"[search] Warning: registry sync failed: {e}", file=sys.stderr)
+            print(f"[search] Warning: state sync failed: {e}", file=sys.stderr)
 
     print(json.dumps({
         "papers_added": len(papers),

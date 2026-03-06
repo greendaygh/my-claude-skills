@@ -1,4 +1,4 @@
-"""Apply Panel B verdicts to paper_list and run_registry in one step.
+"""Apply Panel B verdicts to paper_list and wf_state in one step.
 
 Replaces the inline Python + per-paper apply-verdict loop in SKILL.md 5-1.
 The orchestrator runs this script instead of reading paper_list and panel B files.
@@ -8,7 +8,7 @@ CLI:
         --wf-id WB030 \
         --panel-b-path ~/dev/wf-mining/WB030/reviews/panel_B_runs/run_1_2026-03-04.json \
         --paper-list-path ~/dev/wf-mining/WB030/01_papers/paper_list_1.json \
-        --registry ~/dev/wf-mining/run_registry.json
+        --root-dir ~/dev/wf-mining
 """
 from __future__ import annotations
 
@@ -107,11 +107,11 @@ def _cross_validate(
 def apply_verdicts(
     panel_b_path: Path,
     paper_list_path: Path,
-    registry_path: Path,
+    root_dir: Path,
     wf_id: str,
     cross_validate: bool = False,
 ) -> dict:
-    """Apply Panel B verdicts to paper_list and registry.
+    """Apply Panel B verdicts to paper_list and wf_state.
 
     Returns a summary dict with counts.
     """
@@ -153,11 +153,11 @@ def apply_verdicts(
     # Save updated paper_list
     paper_list_path.write_text(json.dumps(paper_list, indent=2, ensure_ascii=False))
 
-    # Apply verdicts to registry via run_tracker
-    if registry_path.exists():
+    # Apply verdicts to wf_state via run_tracker
+    if root_dir.exists():
         from .run_tracker import RunTracker
-        tracker = RunTracker(registry_path)
-        tracker.apply_verdicts_from_file(wf_id, panel_b_path)
+        tracker = RunTracker(root_dir, wf_id)
+        tracker.apply_verdicts_from_file(panel_b_path)
 
     # Only paper_id coverage issues are hard failures; title mismatches are soft warnings
     hard_failures = [w for w in warnings if "title mismatch" not in w]
@@ -172,15 +172,19 @@ def main() -> None:
     parser.add_argument("--wf-id", required=True)
     parser.add_argument("--panel-b-path", type=Path, required=True)
     parser.add_argument("--paper-list-path", type=Path, required=True)
-    parser.add_argument("--registry", type=Path, required=True)
+    g = parser.add_mutually_exclusive_group(required=True)
+    g.add_argument("--root-dir", type=Path, help="Root directory (v2)")
+    g.add_argument("--registry", type=Path, help="Legacy registry file path")
     parser.add_argument("--cross-validate", action="store_true",
                         help="Cross-validate Panel B paper_ids and titles against paper_list")
     args = parser.parse_args()
 
+    root = args.root_dir or args.registry.expanduser().resolve().parent
+
     result = apply_verdicts(
         panel_b_path=args.panel_b_path,
         paper_list_path=args.paper_list_path,
-        registry_path=args.registry,
+        root_dir=root,
         wf_id=args.wf_id,
         cross_validate=args.cross_validate,
     )

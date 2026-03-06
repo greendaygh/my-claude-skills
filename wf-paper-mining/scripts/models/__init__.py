@@ -2,6 +2,7 @@ from .base import StrictModel, FlexModel, DetailedViolation
 from .state import (
     PaperStatus, SaturationMetrics, StableCache, RunRecord,
     WorkflowEntry, GlobalStats, RunRegistry,
+    WorkflowState, WorkflowIndexEntry, RegistryIndex,
 )
 from .paper_list import MiningPaper, MiningPaperList
 from .extraction import (
@@ -25,6 +26,7 @@ __all__ = [
     "StrictModel", "FlexModel", "DetailedViolation",
     "PaperStatus", "SaturationMetrics", "StableCache", "RunRecord",
     "WorkflowEntry", "GlobalStats", "RunRegistry",
+    "WorkflowState", "WorkflowIndexEntry", "RegistryIndex",
     "MiningPaper", "MiningPaperList",
     "HardwareUoRef", "SoftwareUoRef", "WorkflowRef",
     "EquipmentEntry", "ConsumableEntry", "ReagentEntry", "SampleEntry",
