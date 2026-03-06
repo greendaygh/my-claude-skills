@@ -141,9 +141,14 @@ def apply_verdicts(
             for p in paper_list["papers"]:
                 if p["paper_id"] == paper_id:
                     p["extraction_status"] = "rejected"
+                    p["panel_b_verdict"] = "reject"
                     break
         else:
             accepted += 1
+            for p in paper_list["papers"]:
+                if p["paper_id"] == paper_id:
+                    p["panel_b_verdict"] = "accept"
+                    break
 
     # Save updated paper_list
     paper_list_path.write_text(json.dumps(paper_list, indent=2, ensure_ascii=False))

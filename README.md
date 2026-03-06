@@ -3,7 +3,7 @@
 SBLab KRIBB의 Claude Code 커스텀 스킬 모음.
 바이오파운드리 워크플로 구성, 과학 문헌 분석, 스킬 자동 생성 등을 지원합니다.
 
-**Version**: 1.11.1
+**Version**: 1.12.0
 
 ---
 
@@ -34,7 +34,7 @@ workflow-composer (Orchestrator v2.4)
 
 | Skill | Version | Description |
 |-------|---------|-------------|
-| **wf-paper-mining** | 1.0.2 | PubMed/OpenAlex 논문 검색, PMC full text 추출, 4-패널 전문가 검증, 7-Component UO 기반 리소스 추출. Thin Controller + RunManifest 아키텍처, 워크플로별 키워드 캐시, 순차 실행 전용 |
+| **wf-paper-mining** | 1.0.3 | PubMed/OpenAlex 논문 검색, PMC full text 추출, 4-패널 전문가 검증, 7-Component UO 기반 리소스 추출. Thin Controller + RunManifest 아키텍처, 워크플로별 키워드 캐시, 순차 실행 전용 |
 
 ### Science & Analysis Skills
 

@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.12.0] — 2026-03-07
+
+### wf-paper-mining (1.0.3)
+
+#### Changed
+- **Extraction status filtering clarification** — SKILL.md에 extraction_status 필드로 필터링할 것을 명시 (panel_b_verdict 필드와 혼동 방지)
+- **Large file reading hint** — full text 읽기 시 limit 파라미터를 사용한 분할 읽기 안내 추가
+- **panel_b_verdict field** — `apply_panel_b_verdicts.py`에서 accept/reject 모두 `panel_b_verdict` 필드를 paper_list에 기록하도록 개선
+
 ## [1.11.1] — 2026-03-06
 
 ### wf-paper-mining (1.0.2)
