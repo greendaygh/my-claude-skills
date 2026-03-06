@@ -3,6 +3,10 @@
 Searches PubMed (MeSH + workflow keywords), falls back to OpenAlex
 when PubMed results are insufficient.  Outputs per-run paper_list_{run_id}.json.
 
+Keywords are loaded from wf_search_keywords.json (per-workflow LLM-generated
+cache) instead of shared domain groups, so each workflow gets its own
+tailored search terms derived from its catalog description.
+
 CLI:
     python -m scripts.search_papers \
         --workflow-id WB030 \
@@ -47,12 +51,34 @@ AUTOMATION_TERMS = (
 
 # ========== PubMed functions ==========
 
+def _load_keyword_cache(assets_dir: Path, wf_id: str) -> tuple[list[str], list[str]]:
+    """Load per-workflow keywords from wf_search_keywords.json cache.
+
+    Returns (search_keywords, mesh_terms) for the given workflow ID.
+    Falls back to empty lists if not cached.
+    """
+    cache_path = assets_dir / "wf_search_keywords.json"
+    if not cache_path.exists():
+        print(f"[search] WARNING: keyword cache not found at {cache_path}", file=sys.stderr)
+        return [], []
+    try:
+        cache = json.loads(cache_path.read_text())
+        wf_entry = cache.get("workflows", {}).get(wf_id, {})
+        return (
+            wf_entry.get("search_keywords", []),
+            wf_entry.get("mesh_terms", []),
+        )
+    except Exception as e:
+        print(f"[search] WARNING: failed to load keyword cache: {e}", file=sys.stderr)
+        return [], []
+
+
 def _build_pubmed_query(
     wf_name: str,
-    domain_keywords: list[str],
+    search_keywords: list[str],
     mesh_terms: list[str],
 ) -> str:
-    """Build a PubMed query using MeSH terms + workflow name + domain keywords."""
+    """Build a PubMed query using per-workflow MeSH terms + name + keywords."""
     parts: list[str] = []
 
     if mesh_terms:
@@ -62,8 +88,8 @@ def _build_pubmed_query(
     if wf_name:
         parts.append(f'"{wf_name}"')
 
-    if domain_keywords:
-        kw_part = " OR ".join(f'"{k}"' for k in domain_keywords[:6])
+    if search_keywords:
+        kw_part = " OR ".join(f'"{k}"' for k in search_keywords[:8])
         parts.append(f"({kw_part})")
 
     base = " OR ".join(parts) if parts else "biofoundry"
@@ -226,13 +252,13 @@ def _reconstruct_abstract(inverted_index: dict | None) -> str:
 
 def _build_openalex_query(
     wf_name: str,
-    domain_keywords: list[str],
+    search_keywords: list[str],
 ) -> str:
-    """Build a 3-tier OpenAlex query."""
+    """Build an OpenAlex query from per-workflow keywords."""
     tier1 = f'"{wf_name}" AND ({AUTOMATION_TERMS})' if wf_name else ""
-    if domain_keywords:
-        domain_part = " OR ".join(f'"{k}"' for k in domain_keywords[:8])
-        tier2 = f"({domain_part}) AND ({AUTOMATION_TERMS})"
+    if search_keywords:
+        kw_part = " OR ".join(f'"{k}"' for k in search_keywords[:8])
+        tier2 = f"({kw_part}) AND ({AUTOMATION_TERMS})"
     else:
         tier2 = ""
 
@@ -372,18 +398,18 @@ def _load_known_dois_from_papers(papers_dir: Path) -> set[str]:
     return known
 
 
-def _find_domain_info(
-    extraction_config: dict, wf_id: str
-) -> tuple[str, list[str], list[str]]:
-    """Find (domain_name, search_keywords, mesh_terms) for a workflow."""
-    for domain_name, group in extraction_config.get("domain_groups", {}).items():
-        if wf_id in group.get("workflows", []):
-            return (
-                domain_name,
-                group.get("search_keywords", []),
-                group.get("mesh_terms", []),
-            )
-    return ("unknown", [], [])
+def _count_existing_papers(papers_dir: Path) -> int:
+    """Count existing papers in this workflow's paper_lists."""
+    count = 0
+    for f in papers_dir.glob("paper_list_*.json"):
+        try:
+            data = json.loads(f.read_text())
+            count += len(data.get("papers", []))
+        except Exception:
+            continue
+    return count
+
+
 
 
 # ========== Main ==========
@@ -414,9 +440,14 @@ def main() -> None:
     wf_info = wf_catalog.get("workflows", {}).get(args.workflow_id, {})
     wf_name = wf_info.get("name", args.workflow_id)
 
-    domain_name, domain_keywords, mesh_terms = _find_domain_info(
-        extraction_config, args.workflow_id,
-    )
+    # Load per-workflow keywords from LLM-generated cache
+    search_keywords, mesh_terms = _load_keyword_cache(args.assets, args.workflow_id)
+    if not search_keywords and not mesh_terms:
+        print(
+            f"[search] WARNING: no cached keywords for {args.workflow_id}, "
+            f"using workflow name only",
+            file=sys.stderr,
+        )
 
     # --- Load known DOIs/PMIDs for dedup ---
     papers_dir = args.output / "01_papers"
@@ -444,7 +475,7 @@ def main() -> None:
     )
 
     # --- PubMed primary search ---
-    pubmed_query = _build_pubmed_query(wf_name, domain_keywords, mesh_terms)
+    pubmed_query = _build_pubmed_query(wf_name, search_keywords, mesh_terms)
     pmids, pubmed_total = _search_pubmed(pubmed_query)
 
     new_pmids = [p for p in pmids if p not in known_pmids]
@@ -504,7 +535,7 @@ def main() -> None:
             f"[search] PubMed yielded {len(pubmed_papers)}, need {need_more} more from OpenAlex",
             file=sys.stderr,
         )
-        oa_query = _build_openalex_query(wf_name, domain_keywords)
+        oa_query = _build_openalex_query(wf_name, search_keywords)
 
         pubmed_dois = {_norm_doi(p.get("doi", "")) for p in pubmed_papers if p.get("doi")}
         all_exclude_dois = known_dois | pubmed_dois
@@ -547,10 +578,11 @@ def main() -> None:
         print(json.dumps({"papers_added": 0, "path": str(paper_list_path)}))
         return
 
-    start_id = len(known_dois) + len(known_pmids) + 1
+    existing_count = _count_existing_papers(papers_dir)
+    start_id = existing_count + 1
     papers: list[MiningPaper] = []
     for i, meta in enumerate(all_meta):
-        pid = f"P{start_id + i:04d}"
+        pid = f"{args.workflow_id}_P{start_id + i:03d}"
         if meta.get("source") == "pubmed":
             papers.append(_pubmed_meta_to_mining_paper(meta, pid, args.run_id))
         else:

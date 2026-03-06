@@ -24,11 +24,10 @@ from .models.manifest import (
 )
 
 
-def _find_domain(extraction_config: dict, wf_id: str) -> str:
-    for domain_name, group in extraction_config.get("domain_groups", {}).items():
-        if wf_id in group.get("workflows", []):
-            return domain_name
-    return "unknown"
+def _find_category(workflow_catalog: dict, wf_id: str) -> str:
+    """Get workflow category (Design/Build/Test/Learn) from workflow_catalog."""
+    wf = workflow_catalog.get("workflows", {}).get(wf_id, {})
+    return wf.get("category", "unknown").lower()
 
 
 def _get_wf_description(workflow_catalog: dict, wf_id: str) -> str:
@@ -125,13 +124,13 @@ def plan_run(
     workflow_catalog = json.loads((assets_dir / "workflow_catalog.json").read_text())
     uo_catalog = json.loads((assets_dir / "uo_catalog.json").read_text())
 
-    domain = _find_domain(extraction_config, wf_id)
+    category = _find_category(workflow_catalog, wf_id)
     uo_candidates = _get_uo_candidates(uo_catalog)
     wf_description = _get_wf_description(workflow_catalog, wf_id)
 
     file_paths = _build_file_paths(assets_dir, wf_output_dir)
     session_context = SessionContext(
-        domain=domain,
+        domain=category,
         uo_candidates=uo_candidates,
         wf_description=wf_description,
     )

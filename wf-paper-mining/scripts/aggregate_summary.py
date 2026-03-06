@@ -14,9 +14,10 @@ from .models.state import RunRegistry
 
 
 def _glob_extractions(input_dir: Path, workflow_id: str) -> list[Path]:
-    new_pattern = f"*_{workflow_id}.json"
-    legacy_pattern = "*_extraction.json"
-    found = set(input_dir.glob(new_pattern)) | set(input_dir.glob(legacy_pattern))
+    wf_prefix_pattern = f"{workflow_id}_P*.json"
+    legacy_pattern1 = f"*_{workflow_id}.json"
+    legacy_pattern2 = "*_extraction.json"
+    found = set(input_dir.glob(wf_prefix_pattern)) | set(input_dir.glob(legacy_pattern1)) | set(input_dir.glob(legacy_pattern2))
     return sorted(found)
 
 

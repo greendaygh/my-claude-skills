@@ -3,7 +3,7 @@
 SBLab KRIBB의 Claude Code 커스텀 스킬 모음.
 바이오파운드리 워크플로 구성, 과학 문헌 분석, 스킬 자동 생성 등을 지원합니다.
 
-**Version**: 1.11.0
+**Version**: 1.11.1
 
 ---
 
@@ -34,7 +34,7 @@ workflow-composer (Orchestrator v2.4)
 
 | Skill | Version | Description |
 |-------|---------|-------------|
-| **wf-paper-mining** | 1.0.0 | PubMed/OpenAlex 논문 검색, PMC full text 추출, 4-패널 전문가 검증, 7-Component UO 기반 리소스 추출. Thin Controller + RunManifest 아키텍처, 64 워크플로 대상 |
+| **wf-paper-mining** | 1.0.2 | PubMed/OpenAlex 논문 검색, PMC full text 추출, 4-패널 전문가 검증, 7-Component UO 기반 리소스 추출. Thin Controller + RunManifest 아키텍처, 워크플로별 키워드 캐시, 순차 실행 전용 |
 
 ### Science & Analysis Skills
 
@@ -149,7 +149,7 @@ my-claude-skills/
 │   ├── CHANGELOG.md
 │   ├── scripts/          # search_papers.py, fetch_fulltext.py, run_tracker.py, plan_run.py, validate_outputs.py, ...
 │   │   └── models/       # Pydantic v2 models (paper_list, state, extraction, summary, variant, ...)
-│   ├── assets/           # extraction_config.json, panel_configs.json, workflow_catalog.json, uo_catalog.json
+│   ├── assets/           # extraction_config.json, panel_configs.json, workflow_catalog.json, uo_catalog.json, wf_search_keywords.json
 │   └── references/       # extraction_guide.md, panel_protocol.md
 ├── prophage-miner/          # Prophage Literature Mining & Knowledge Graph
 │   ├── SKILL.md

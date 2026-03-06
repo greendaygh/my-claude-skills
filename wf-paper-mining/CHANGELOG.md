@@ -1,5 +1,23 @@
 # Changelog — wf-paper-mining
 
+## [1.0.2] — 2026-03-06
+
+### Changed
+- **Per-workflow keyword cache** — `wf_search_keywords.json`에서 워크플로별 LLM 생성 검색 키워드 로드. `extraction_config.json`의 공유 `domain_groups` 제거
+- **Workflow-prefixed paper IDs** — `P0001` → `{WF_ID}_P{NNN}` 형식 (예: `WB030_P001`). 워크플로 간 ID 충돌 방지
+- **Sequential-only execution** — 멀티 워크플로 실행 시 순차 전용 규칙 SKILL.md에 명시 (병렬 실행 절대 금지)
+- **Extraction file naming** — `{paper_id}_{WF_ID}.json` → `{paper_id}.json`으로 단순화 (paper_id에 이미 WF_ID 포함)
+- **Fuzzy title matching** — Panel B title 비교를 prefix 방식에서 `SequenceMatcher` (threshold 0.85)로 변경. LLM 자동 오타 교정 대응
+- **Robust Panel B verdict parsing** — `results`, `round_2.final_verdict`, `summary.accepted_ids/rejected_ids` 등 추가 포맷 지원
+- **Soft warning for title mismatch** — title mismatch는 경고만, paper_id 불일치만 hard failure로 처리
+- **Domain → Category** — `plan_run.py`가 `extraction_config.json`의 domain_groups 대신 `workflow_catalog.json`의 category (Design/Build/Test/Learn) 사용
+- **validate_outputs paper_id regex** — `^P\d{4,}$` → `^[A-Z]{2}\d{3}_P\d{3,}$`로 새 형식 반영
+
+### Added
+- `wf_search_keywords.json` — 워크플로별 검색 키워드/MeSH 캐시 파일
+
+---
+
 ## [1.0.1] — 2026-03-05
 
 ### Fixed

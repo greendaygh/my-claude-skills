@@ -151,7 +151,7 @@ def _run_quick(output_dir: Path, run_id: str) -> dict:
 
     # Check paper_id format
     import re
-    bad_ids = [p["paper_id"] for p in papers if not re.match(r"^P\d{4,}$", p.get("paper_id", ""))]
+    bad_ids = [p["paper_id"] for p in papers if not re.match(r"^[A-Z]{2}\d{3}_P\d{3,}$", p.get("paper_id", ""))]
     if bad_ids:
         return {"ok": False, "reason": f"invalid paper_id format: {bad_ids}"}
 

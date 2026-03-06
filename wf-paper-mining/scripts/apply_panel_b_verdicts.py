@@ -15,19 +15,44 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from difflib import SequenceMatcher
 from pathlib import Path
+
+# Title similarity threshold: LLM subagents may auto-correct typos in titles,
+# so we use fuzzy matching instead of exact prefix comparison.
+_TITLE_SIMILARITY_THRESHOLD = 0.85
 
 
 def _extract_verdicts(panel_b: dict) -> dict[str, str]:
     """Extract paper_id -> verdict mapping from various Panel B formats."""
     verdicts = panel_b.get("final_verdicts", panel_b.get("verdicts", {}))
     if not verdicts:
-        items = panel_b.get("papers", panel_b.get("reviews", []))
+        # Try list-based formats: papers, reviews, results
+        items = panel_b.get("papers", panel_b.get("reviews", panel_b.get("results", [])))
         if items:
-            verdicts = {
-                p["paper_id"]: p.get("verdict", p.get("panel_b_verdict", "accept"))
-                for p in items if "paper_id" in p
-            }
+            verdicts = {}
+            for p in items:
+                if "paper_id" not in p:
+                    continue
+                # Check multiple possible verdict locations
+                v = p.get("verdict") or p.get("panel_b_verdict") or p.get("final_verdict")
+                if not v:
+                    # Check nested round_2.final_verdict (subagent variant format)
+                    r2 = p.get("round_2", p.get("round_2_vote", {}))
+                    if isinstance(r2, dict):
+                        v = r2.get("final_verdict") or r2.get("verdict")
+                verdicts[p["paper_id"]] = v or "accept"
+    # Try summary.accepted_ids / rejected_ids format
+    if not verdicts:
+        summary = panel_b.get("summary", {})
+        accepted_ids = summary.get("accepted_ids", [])
+        rejected_ids = summary.get("rejected_ids", [])
+        if accepted_ids or rejected_ids:
+            verdicts = {}
+            for pid in accepted_ids:
+                verdicts[pid] = "accept"
+            for pid in rejected_ids:
+                verdicts[pid] = "reject"
     # Normalize dict values to strings
     normalized: dict[str, str] = {}
     for pid, val in verdicts.items():
@@ -53,7 +78,7 @@ def _cross_validate(
         if pid not in paper_ids_in_list:
             warnings.append(f"paper_id {pid} in panel B but not in paper_list")
 
-    # Check title match if Panel B includes titles
+    # Check title match if Panel B includes titles (fuzzy: LLM may auto-correct typos)
     items = panel_b.get("papers", panel_b.get("reviews", []))
     if items:
         for item in items:
@@ -62,13 +87,13 @@ def _cross_validate(
             if pid in paper_map and b_title:
                 list_title = paper_map[pid].get("title", "")
                 if list_title:
-                    bt = b_title.strip().lower()
-                    lt = list_title.strip().lower()
-                    # Use shorter title length for prefix comparison (handles truncated API titles)
-                    cmp_len = min(len(bt), len(lt), 60)
-                    if cmp_len > 10 and bt[:cmp_len] != lt[:cmp_len]:
+                    ratio = SequenceMatcher(
+                        None, b_title.strip().lower(), list_title.strip().lower()
+                    ).ratio()
+                    if ratio < _TITLE_SIMILARITY_THRESHOLD:
                         warnings.append(
-                            f"{pid} title mismatch: panel_b='{b_title[:40]}...' vs paper_list='{list_title[:40]}...'"
+                            f"{pid} title mismatch (similarity={ratio:.2f}): "
+                            f"panel_b='{b_title[:40]}...' vs paper_list='{list_title[:40]}...'"
                         )
 
     # Check coverage: all paper_list papers should have a verdict
@@ -129,7 +154,9 @@ def apply_verdicts(
         tracker = RunTracker(registry_path)
         tracker.apply_verdicts_from_file(wf_id, panel_b_path)
 
-    ok = len(warnings) == 0 or not cross_validate
+    # Only paper_id coverage issues are hard failures; title mismatches are soft warnings
+    hard_failures = [w for w in warnings if "title mismatch" not in w]
+    ok = len(hard_failures) == 0
     return {"ok": ok, "accepted": accepted, "rejected": rejected, "warnings": warnings}
 
 

@@ -1,0 +1,263 @@
+{
+  "version": "1.0",
+  "source": "LLM-generated from workflow_catalog.json descriptions",
+  "generated": "2026-03-06",
+  "workflows": {
+    "WD010": {
+      "mesh_terms": ["Research Design", "Models, Statistical"],
+      "search_keywords": ["design of experiments", "DOE", "factorial design", "response surface methodology", "experimental optimization", "combinatorial design"]
+    },
+    "WD020": {
+      "mesh_terms": ["Directed Molecular Evolution", "Mutation", "Adaptation, Physiological"],
+      "search_keywords": ["adaptive laboratory evolution", "ALE", "directed evolution", "UV mutagenesis", "environmental stress adaptation", "serial passaging"]
+    },
+    "WD030": {
+      "mesh_terms": ["Culture Media", "Cell Culture Techniques"],
+      "search_keywords": ["growth media optimization", "media composition design", "culture condition optimization", "nutrient formulation", "media screening"]
+    },
+    "WD040": {
+      "mesh_terms": ["Fermentation", "Cell Culture Techniques", "Bioreactors"],
+      "search_keywords": ["parallel fermentation design", "scale-up condition design", "high-throughput cultivation design", "bioprocess parameter optimization"]
+    },
+    "WD050": {
+      "mesh_terms": ["Oligonucleotides", "DNA, Synthetic"],
+      "search_keywords": ["oligonucleotide pool design", "oligo synthesis design", "DNA fragment design", "gene synthesis oligo", "overlap extension design"]
+    },
+    "WD060": {
+      "mesh_terms": ["Gene Regulatory Networks", "Synthetic Biology", "Biosensing Techniques"],
+      "search_keywords": ["genetic circuit design", "biosensor design", "logic gate genetic", "RBS calculator", "Cello genetic design", "gene expression control"]
+    },
+    "WD070": {
+      "mesh_terms": ["Genetic Vectors", "Plasmids"],
+      "search_keywords": ["vector design", "plasmid construction design", "expression vector", "BAC construction", "YAC design", "cloning vector"]
+    },
+    "WD080": {
+      "mesh_terms": ["Genome, Synthetic", "Synthetic Biology"],
+      "search_keywords": ["synthetic genome design", "artificial genome", "genome minimization", "codon redesign", "minimal genome", "genome refactoring"]
+    },
+    "WD090": {
+      "mesh_terms": ["CRISPR-Cas Systems", "Gene Editing", "RNA, Guide, CRISPR-Cas Systems"],
+      "search_keywords": ["CRISPR design", "guide RNA design", "gRNA design tool", "off-target prediction", "genome editing design", "Cas9 target selection"]
+    },
+    "WD100": {
+      "mesh_terms": ["Protein Engineering", "Mutagenesis, Site-Directed", "Directed Molecular Evolution"],
+      "search_keywords": ["protein library design", "directed evolution library", "saturation mutagenesis design", "protein variant library", "combinatorial protein library"]
+    },
+    "WD110": {
+      "mesh_terms": ["Protein Engineering", "Computational Biology", "Enzymes"],
+      "search_keywords": ["de novo protein design", "RFdiffusion", "ProteinMPNN", "computational enzyme design", "protein structure prediction design", "biocatalyst design"]
+    },
+    "WD120": {
+      "mesh_terms": ["Metabolic Engineering", "Metabolic Networks and Pathways"],
+      "search_keywords": ["retrosynthesis pathway", "RetroPath", "metabolic pathway design", "Selenzyme", "enzyme selection pathway", "biosynthetic route design"]
+    },
+    "WD130": {
+      "mesh_terms": ["Metabolic Engineering", "Gene Library", "Synthetic Biology"],
+      "search_keywords": ["pathway library design", "combinatorial pathway engineering", "promoter RBS library", "expression optimization library", "pathway balancing"]
+    },
+    "WB005": {
+      "mesh_terms": ["Nucleic Acids/analysis", "Spectrophotometry, Ultraviolet"],
+      "search_keywords": ["nucleic acid quantification", "DNA quantification", "RNA quantification", "NanoDrop", "Qubit", "A260 A280", "fluorometric DNA assay", "microplate nucleic acid"]
+    },
+    "WB010": {
+      "mesh_terms": ["DNA, Synthetic", "Oligonucleotides/chemistry"],
+      "search_keywords": ["oligonucleotide assembly", "gene synthesis", "oligo assembly", "overlap extension PCR", "polymerase cycling assembly"]
+    },
+    "WB020": {
+      "mesh_terms": ["Gene Library", "Mutagenesis"],
+      "search_keywords": ["DNA library construction", "combinatorial library", "random mutagenesis library", "metagenomic library", "error-prone PCR library"]
+    },
+    "WB025": {
+      "mesh_terms": ["High-Throughput Nucleotide Sequencing", "Sequence Analysis, DNA"],
+      "search_keywords": ["NGS library preparation", "sequencing library prep", "adapter ligation", "barcode indexing", "library normalization", "tagmentation"]
+    },
+    "WB030": {
+      "mesh_terms": ["Cloning, Molecular", "DNA, Recombinant"],
+      "search_keywords": ["DNA assembly", "Gibson assembly", "Golden Gate assembly", "restriction cloning", "DNA ligation", "modular cloning", "MoClo"]
+    },
+    "WB040": {
+      "mesh_terms": ["DNA/isolation & purification"],
+      "search_keywords": ["DNA purification", "DNA cleanup", "magnetic bead DNA purification", "column chromatography DNA", "plasmid purification", "PCR cleanup"]
+    },
+    "WB045": {
+      "mesh_terms": ["DNA/isolation & purification", "Cell Lysis"],
+      "search_keywords": ["DNA extraction", "genomic DNA isolation", "cell lysis DNA", "DNA isolation protocol", "gDNA extraction"]
+    },
+    "WB050": {
+      "mesh_terms": ["RNA/isolation & purification", "Gene Expression Profiling"],
+      "search_keywords": ["RNA extraction", "RNA isolation", "total RNA purification", "TRIzol extraction", "mRNA isolation", "RNA quality control", "automated RNA extraction"]
+    },
+    "WB060": {
+      "mesh_terms": ["High-Throughput Nucleotide Sequencing", "DNA Barcoding, Taxonomic"],
+      "search_keywords": ["DNA multiplexing", "barcode PCR", "sample pooling sequencing", "indexed library pooling", "multiplexed sequencing"]
+    },
+    "WB070": {
+      "mesh_terms": ["Cell-Free System", "Cell Extracts"],
+      "search_keywords": ["cell-free extract preparation", "TX-TL system preparation", "cell lysate preparation", "cell-free master mix", "S30 extract"]
+    },
+    "WB080": {
+      "mesh_terms": ["Cell-Free System", "Protein Biosynthesis"],
+      "search_keywords": ["cell-free protein expression", "in vitro transcription translation", "TX-TL protein synthesis", "cell-free enzyme expression", "PURE system"]
+    },
+    "WB090": {
+      "mesh_terms": ["Proteins/isolation & purification", "Chromatography, Affinity"],
+      "search_keywords": ["protein purification", "affinity chromatography", "His-tag purification", "IMAC protein", "Ni-NTA purification", "automated protein purification"]
+    },
+    "WB100": {
+      "mesh_terms": ["Culture Media", "Sterilization"],
+      "search_keywords": ["growth media preparation", "media sterilization", "autoclave media", "aseptic media preparation", "liquid media formulation"]
+    },
+    "WB110": {
+      "mesh_terms": ["Transformation, Bacterial", "Electroporation"],
+      "search_keywords": ["competent cell preparation", "electrocompetent cells", "chemically competent cells", "transformation efficiency", "competent cell construction"]
+    },
+    "WB120": {
+      "mesh_terms": ["Transformation, Bacterial", "Conjugation, Genetic", "Electroporation"],
+      "search_keywords": ["bacterial transformation", "electroporation", "conjugation DNA transfer", "heat shock transformation", "plate-based transformation"]
+    },
+    "WB125": {
+      "mesh_terms": ["Colony Count, Microbial"],
+      "search_keywords": ["colony picking", "automated colony picker", "colony selection", "clonal isolation", "colony screening", "robotic colony picking"]
+    },
+    "WB130": {
+      "mesh_terms": ["Cell Culture Techniques", "Agar"],
+      "search_keywords": ["solid media cell culture", "agar plate culture", "colony growth", "cell plating", "solid medium screening"]
+    },
+    "WB140": {
+      "mesh_terms": ["Cell Culture Techniques", "Fermentation"],
+      "search_keywords": ["liquid media cell culture", "batch culture", "cell growth liquid", "inoculation culture", "shake flask culture"]
+    },
+    "WB150": {
+      "mesh_terms": ["Polymerase Chain Reaction"],
+      "search_keywords": ["PCR amplification", "target gene amplification", "colony PCR", "gene screening PCR", "multiplex PCR"]
+    },
+    "WT010": {
+      "mesh_terms": ["High-Throughput Nucleotide Sequencing", "Sequence Analysis, DNA"],
+      "search_keywords": ["next-generation sequencing", "NGS run", "Sanger sequencing", "DNA sequencing", "RNA sequencing", "nanopore sequencing", "Illumina sequencing"]
+    },
+    "WT012": {
+      "mesh_terms": ["Real-Time Polymerase Chain Reaction", "Gene Expression Profiling"],
+      "search_keywords": ["RT-qPCR", "quantitative PCR", "digital PCR", "ddPCR", "mRNA expression measurement", "gene expression quantification", "transcript quantification"]
+    },
+    "WT015": {
+      "mesh_terms": ["Electrophoresis, Agar Gel", "Electrophoresis, Capillary"],
+      "search_keywords": ["gel electrophoresis verification", "DNA fragment size analysis", "agarose gel electrophoresis", "capillary electrophoresis DNA", "Bioanalyzer", "TapeStation"]
+    },
+    "WT020": {
+      "mesh_terms": ["Proteomics", "Electrophoresis, Polyacrylamide Gel"],
+      "search_keywords": ["protein expression measurement", "SDS-PAGE", "Western blot quantification", "LC-MS proteomics", "capillary electrophoresis protein"]
+    },
+    "WT030": {
+      "mesh_terms": ["Enzyme Assays", "Kinetics"],
+      "search_keywords": ["enzyme activity assay", "protein activity measurement", "biosensor assay", "kinetic assay", "pNP assay", "enzyme kinetics"]
+    },
+    "WT040": {
+      "mesh_terms": ["Cell-Free System", "Enzyme Assays"],
+      "search_keywords": ["cell-free reaction screening", "parallel cell-free assay", "in vitro enzyme screening", "high-throughput cell-free", "TX-TL screening"]
+    },
+    "WT045": {
+      "mesh_terms": ["Cell Survival", "Cytotoxicity Tests, Immunologic", "Apoptosis"],
+      "search_keywords": ["mammalian cell cytotoxicity", "MTT assay", "MTS assay", "cell viability assay", "IC50 determination", "dose-response cytotoxicity", "LDH release assay"]
+    },
+    "WT046": {
+      "mesh_terms": ["Microbial Sensitivity Tests", "Anti-Bacterial Agents"],
+      "search_keywords": ["MIC determination", "antimicrobial susceptibility", "microbial viability assay", "broth microdilution", "growth inhibition assay", "bactericidal assay"]
+    },
+    "WT050": {
+      "mesh_terms": ["Specimen Handling", "Cell Lysis"],
+      "search_keywords": ["sample pretreatment", "metabolite extraction", "proteomics sample preparation", "cell lysis pretreatment", "sample preprocessing"]
+    },
+    "WT060": {
+      "mesh_terms": ["Metabolomics", "Mass Spectrometry"],
+      "search_keywords": ["metabolite measurement", "GC-MS metabolomics", "LC-MS metabolite", "metabolite quantification", "metabolic profiling"]
+    },
+    "WT070": {
+      "mesh_terms": ["Biosensing Techniques", "High-Throughput Screening Assays"],
+      "search_keywords": ["high-throughput metabolite assay", "single metabolite screening", "biosensor metabolite detection", "microplate metabolite assay"]
+    },
+    "WT080": {
+      "mesh_terms": ["Image Processing, Computer-Assisted", "Microscopy"],
+      "search_keywords": ["high-content imaging", "cell morphology analysis", "image-based screening", "automated microscopy", "high-throughput imaging"]
+    },
+    "WT085": {
+      "mesh_terms": ["Mycoplasma/isolation & purification", "Cell Culture Techniques"],
+      "search_keywords": ["mycoplasma detection", "mycoplasma contamination test", "mycoplasma PCR", "cell culture contamination screening", "mycoplasma assay"]
+    },
+    "WT090": {
+      "mesh_terms": ["Flow Cytometry", "Cell Separation"],
+      "search_keywords": ["FACS sorting", "fluorescence-activated cell sorting", "high-speed cell sorting", "flow cytometry screening", "cell selection sorting"]
+    },
+    "WT100": {
+      "mesh_terms": ["Cell Culture Techniques", "High-Throughput Screening Assays"],
+      "search_keywords": ["micro-scale cell culture", "96 deep well plate culture", "microplate cell culture", "high-throughput cell cultivation", "parallel micro-culture"]
+    },
+    "WT110": {
+      "mesh_terms": ["Fermentation", "Bioreactors"],
+      "search_keywords": ["micro-scale fermentation", "microbioreactor", "BioLector", "parallel micro-fermentation", "high-throughput fermentation monitoring"]
+    },
+    "WT120": {
+      "mesh_terms": ["Fermentation", "Bioreactors"],
+      "search_keywords": ["parallel cell fermentation", "mini-bioreactor", "ambr fermentation", "parallel bioreactor", "15-250 mL fermentation"]
+    },
+    "WT130": {
+      "mesh_terms": ["Cell Culture Techniques", "Bioreactors", "Animals"],
+      "search_keywords": ["mammalian cell fermentation", "CHO cell culture", "animal cell bioreactor", "parallel mammalian culture", "antibody production fermentation"]
+    },
+    "WT140": {
+      "mesh_terms": ["Fermentation", "Bioreactors"],
+      "search_keywords": ["lab-scale fermentation", "bench-top bioreactor", "stirred tank reactor", "fed-batch fermentation", "laboratory bioreactor"]
+    },
+    "WT150": {
+      "mesh_terms": ["Fermentation", "Bioreactors"],
+      "search_keywords": ["pilot-scale fermentation", "scale-up fermentation", "pilot bioreactor", "10-500L fermentation", "process scale-up"]
+    },
+    "WT160": {
+      "mesh_terms": ["Fermentation", "Bioreactors"],
+      "search_keywords": ["industrial-scale fermentation", "large-scale fermentation", "production bioreactor", "manufacturing-scale bioprocess", "industrial bioprocess"]
+    },
+    "WL010": {
+      "mesh_terms": ["Sequence Analysis, DNA", "Sequence Alignment"],
+      "search_keywords": ["sequence variant analysis", "sequence verification", "plasmid verification", "assembly verification sequencing", "variant calling"]
+    },
+    "WL020": {
+      "mesh_terms": ["Whole Genome Sequencing", "Polymorphism, Single Nucleotide"],
+      "search_keywords": ["genome resequencing", "SNP analysis", "whole genome sequencing analysis", "genome variation analysis", "resequencing pipeline"]
+    },
+    "WL030": {
+      "mesh_terms": ["Genome", "Sequence Analysis, DNA", "Contig Mapping"],
+      "search_keywords": ["de novo genome assembly", "genome annotation", "NGS genome assembly", "novel genome characterization", "genome scaffolding"]
+    },
+    "WL040": {
+      "mesh_terms": ["Metagenomics", "Microbiota"],
+      "search_keywords": ["metagenomic analysis", "metagenomic sequencing", "microbial community analysis", "functional metagenomics", "metagenomic enzyme discovery"]
+    },
+    "WL050": {
+      "mesh_terms": ["Transcriptome", "Gene Expression Profiling", "RNA-Seq"],
+      "search_keywords": ["RNA-seq analysis", "transcriptomics", "differential expression analysis", "DEG analysis", "mRNA sequencing analysis"]
+    },
+    "WL055": {
+      "mesh_terms": ["Single-Cell Analysis", "Single-Cell Gene Expression Analysis"],
+      "search_keywords": ["single-cell RNA-seq", "scRNA-seq", "single-cell ATAC-seq", "cellular heterogeneity", "single cell transcriptomics"]
+    },
+    "WL060": {
+      "mesh_terms": ["Metabolic Engineering", "Metabolic Flux Analysis", "Models, Biological"],
+      "search_keywords": ["metabolic pathway optimization", "flux balance analysis", "metabolic modeling", "constraint-based modeling", "FBA pathway optimization"]
+    },
+    "WL070": {
+      "mesh_terms": ["Phenotype", "Image Processing, Computer-Assisted"],
+      "search_keywords": ["phenotypic data analysis", "growth rate analysis", "morphological trait analysis", "phenotype-genotype mapping", "quantitative phenotyping"]
+    },
+    "WL080": {
+      "mesh_terms": ["Protein Engineering", "Machine Learning"],
+      "search_keywords": ["protein optimization model", "machine learning protein engineering", "protein function prediction", "AlphaFold protein analysis", "protein activity optimization"]
+    },
+    "WL090": {
+      "mesh_terms": ["Fermentation", "Models, Biological"],
+      "search_keywords": ["fermentation optimization model", "bioprocess modeling", "fermentation simulation", "process optimization model", "fermentation condition prediction"]
+    },
+    "WL100": {
+      "mesh_terms": ["Deep Learning", "Computational Biology"],
+      "search_keywords": ["biological foundation model", "protein language model", "genomic foundation model", "large-scale sequence pretraining", "biological deep learning"]
+    }
+  }
+}

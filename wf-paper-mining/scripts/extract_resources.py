@@ -15,16 +15,17 @@ from .models.extraction import ExtractionResult
 
 
 def _glob_extractions(input_dir: Path, workflow_id: str) -> list[Path]:
-    new_pattern = f"*_{workflow_id}.json"
-    legacy_pattern = "*_extraction.json"
-    found = set(input_dir.glob(new_pattern)) | set(input_dir.glob(legacy_pattern))
+    wf_prefix_pattern = f"{workflow_id}_P*.json"
+    legacy_pattern1 = f"*_{workflow_id}.json"
+    legacy_pattern2 = "*_extraction.json"
+    found = set(input_dir.glob(wf_prefix_pattern)) | set(input_dir.glob(legacy_pattern1)) | set(input_dir.glob(legacy_pattern2))
     return sorted(found)
 
 
 def _cmd_save(paper_id: str, workflow_id: str, output_dir: Path) -> None:
     data = json.load(sys.stdin)
     ExtractionResult.model_validate(data)
-    out_path = output_dir / f"{paper_id}_{workflow_id}.json"
+    out_path = output_dir / f"{paper_id}.json"
     out_path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(dir=out_path.parent, prefix=".tmp_", suffix=".json")
     try:
