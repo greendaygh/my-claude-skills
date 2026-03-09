@@ -399,15 +399,27 @@ def _load_known_dois_from_papers(papers_dir: Path) -> set[str]:
 
 
 def _count_existing_papers(papers_dir: Path) -> int:
-    """Count existing papers in this workflow's paper_lists."""
-    count = 0
+    """Find the maximum paper number across all paper_list files.
+
+    Returns the highest N from paper_ids like '{WF_ID}_P{NNN}',
+    so that new papers start from N+1. This handles cases where
+    legacy/migrated papers have IDs not starting from P001.
+    """
+    max_num = 0
     for f in papers_dir.glob("paper_list_*.json"):
         try:
             data = json.loads(f.read_text())
-            count += len(data.get("papers", []))
+            for p in data.get("papers", []):
+                pid = p.get("paper_id", "")
+                if "_P" in pid:
+                    try:
+                        num = int(pid.rsplit("_P", 1)[1])
+                        max_num = max(max_num, num)
+                    except (ValueError, IndexError):
+                        pass
         except Exception:
             continue
-    return count
+    return max_num
 
 
 

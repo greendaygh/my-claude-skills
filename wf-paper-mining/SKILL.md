@@ -71,6 +71,9 @@ ASSETS=$SKILL_DIR/assets
 ROOT_DIR=~/dev/wf-mining
 ```
 
+**중요: 모든 `python -m scripts.*` 명령은 반드시 `$SKILL_DIR`에서 실행해야 한다.**
+즉, 모든 python 명령 앞에 `cd $SKILL_DIR &&`를 붙일 것.
+
 사용자가 지정한 워크플로 ID를 `WF_ID`로 설정. **세션당 1개 워크플로만 처리.**
 
 ### 1. RunManifest 생성

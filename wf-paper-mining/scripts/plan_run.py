@@ -141,6 +141,10 @@ def plan_run(
         manifest_path.write_text(manifest.model_dump_json(indent=2))
         return manifest_path
 
+    # Register placeholder RunRecord in wf_state so that papers added
+    # with this run_id pass the _validate_run_id_references validator.
+    tracker.start_run(domain=category)
+
     panel_mode = tracker.determine_panel_mode()
     saturation_action = exec_info.get("saturation_action", "search")
     is_saturated = saturation_action == "skip"

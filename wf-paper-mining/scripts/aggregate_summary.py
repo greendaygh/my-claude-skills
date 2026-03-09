@@ -25,8 +25,10 @@ def _normalize_extraction(data: dict) -> dict:
     """Normalize common LLM field-name variations to match ExtractionResult schema."""
     alias_map_list = {
         "workflows": {"workflow_id": "catalog_id", "workflow_name": "name"},
-        "hardware_uos": {"uo_id": "catalog_id", "uo_name": "name"},
-        "software_uos": {"uo_id": "catalog_id", "uo_name": "name"},
+        "hardware_uos": {"uo_id": "catalog_id", "uo_name": "name",
+                         "mapped_uo_id": "catalog_id", "mapped_uo_name": "name"},
+        "software_uos": {"uo_id": "catalog_id", "uo_name": "name",
+                         "mapped_uo_id": "catalog_id", "mapped_uo_name": "name"},
     }
     for field, renames in alias_map_list.items():
         for item in data.get(field, []):
@@ -45,6 +47,10 @@ def _normalize_extraction(data: dict) -> dict:
             if alias in qc and "name" not in qc:
                 qc["name"] = qc.pop(alias)
                 break
+        if "method" in qc and "metric" not in qc:
+            qc["metric"] = qc.pop("method")
+        if "criteria" in qc and "threshold" not in qc:
+            qc["threshold"] = qc.pop("criteria")
 
     # Normalize confidence: string labels -> float
     confidence_map = {"high": 0.9, "medium": 0.6, "low": 0.3, "very high": 0.95, "very low": 0.1}

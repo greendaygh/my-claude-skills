@@ -149,6 +149,10 @@ class RunTracker:
         if domain and not self._state.domain:
             self._state.domain = domain
         run_id = len(self._state.runs) + 1
+        # Add placeholder RunRecord so that papers added with this run_id
+        # pass the _validate_run_id_references validator on next load.
+        placeholder = RunRecord(run_id=run_id, run_date=_now())
+        self._state.runs.append(placeholder)
         self._save()
         return run_id
 
