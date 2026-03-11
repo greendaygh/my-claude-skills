@@ -233,6 +233,7 @@ class RunTracker:
         if paper_id not in self._state.paper_status:
             return
         ps = self._state.paper_status[paper_id]
+        verdict = verdict.lower()
         ps.panel_verdict = verdict
         if verdict == "accept":
             if ps.status not in ("extracted",):
@@ -251,6 +252,9 @@ class RunTracker:
     def apply_verdicts_from_file(self, result_path: Path) -> dict:
         """Apply verdicts from a run_result JSON file. Single _save at end."""
         data = json.loads(result_path.read_text())
+        # Handle top-level list format (subagent may omit wrapper dict)
+        if isinstance(data, list):
+            data = {"papers": data}
         verdicts = data.get("verdicts", data.get("final_verdicts", {}))
         if not verdicts:
             items = data.get("papers", data.get("reviews", []))

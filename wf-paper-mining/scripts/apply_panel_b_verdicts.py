@@ -53,13 +53,13 @@ def _extract_verdicts(panel_b: dict) -> dict[str, str]:
                 verdicts[pid] = "accept"
             for pid in rejected_ids:
                 verdicts[pid] = "reject"
-    # Normalize dict values to strings
+    # Normalize dict values to lowercase strings
     normalized: dict[str, str] = {}
     for pid, val in verdicts.items():
         if isinstance(val, dict):
-            normalized[pid] = val.get("verdict", "accept")
+            normalized[pid] = val.get("verdict", "accept").lower()
         else:
-            normalized[pid] = val
+            normalized[pid] = str(val).lower()
     return normalized
 
 
@@ -116,6 +116,9 @@ def apply_verdicts(
     Returns a summary dict with counts.
     """
     panel_b = json.loads(panel_b_path.read_text())
+    # Handle top-level list format (subagent may omit wrapper dict)
+    if isinstance(panel_b, list):
+        panel_b = {"papers": panel_b}
     paper_list = json.loads(paper_list_path.read_text())
 
     verdicts = _extract_verdicts(panel_b)

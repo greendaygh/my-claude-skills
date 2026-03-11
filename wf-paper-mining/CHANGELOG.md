@@ -1,5 +1,16 @@
 # Changelog — wf-paper-mining
 
+## [2.2.0] — 2026-03-12
+
+### Fixed
+- **Verdict 대소문자 정규화** — `apply_panel_b_verdicts.py`와 `run_tracker.py`에서 verdict 값을 `.lower()`로 통일. 대소문자 불일치로 인한 verdict 매칭 실패 방지
+- **Top-level list 포맷 호환** — `apply_panel_b_verdicts.py`의 `apply_verdicts()`와 `run_tracker.py`의 `apply_verdicts_from_file()`에서 서브에이전트가 wrapper dict 없이 list만 반환하는 경우 `{"papers": data}`로 자동 래핑
+
+### Added
+- **Panel C Fallback 전략** — SKILL.md에 API 정책 위반(Usage Policy violation) 시 재시도 프로토콜 추가: (1) 프롬프트 단순화 후 1회 재시도, (2) 오케스트레이터 직접 수행
+
+---
+
 ## [2.0.0] — 2026-03-07
 
 ### Changed

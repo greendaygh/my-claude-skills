@@ -241,6 +241,13 @@ for f in os.listdir(ext_dir):
 > **반드시** {wf_output_dir}/reviews/panel_C_runs/run_{run_id}_{YYYY-MM-DD}.json에 저장.
 > 완료 시 accept/reject 수와 출력 파일 경로만 한 줄로 보고."
 
+#### Panel C Fallback 전략 (API 정책 위반 시)
+
+서브에이전트가 API 정책 위반(Usage Policy violation) 에러를 반환할 경우, 아래 순서로 재시도:
+
+1. **프롬프트 단순화 후 1회 재시도**: "3인 전문가 역할극" 등의 표현을 제거하고, "Review extraction quality for workflow {WF_ID}. Read extraction files, evaluate accuracy and completeness, assign accept/flag_reextract/reject verdict for each." 형태의 간결한 프롬프트로 재시도.
+2. **오케스트레이터 직접 수행**: 재시도도 실패하면 오케스트레이터가 직접 추출 파일을 읽고, 동일한 3인 전문가 평가 프로세스를 수행하여 Panel C JSON을 생성. 출력 형식과 저장 경로는 서브에이전트와 동일하게 유지.
+
 ### 5b. 집계
 
 Panel C 완료 후 스크립트로 집계 (서브에이전트 불필요):
