@@ -1,6 +1,38 @@
 from __future__ import annotations
-from pydantic import field_validator
+import json
+from pydantic import field_validator, model_validator
+from typing import Any
 from .base import StrictModel, FlexModel
+
+
+def _remap_name_fields(values: dict, name_aliases: tuple[str, ...],
+                       catalog_aliases: tuple[str, ...]) -> dict:
+    """Remap common LLM field-name variants to canonical names."""
+    if not isinstance(values, dict):
+        return values
+    # name aliases: workflow_name, uo_name -> name
+    if "name" not in values:
+        for alias in name_aliases:
+            if alias in values:
+                values["name"] = values.pop(alias)
+                break
+    # catalog_id aliases: workflow_id, uo_id -> catalog_id
+    if "catalog_id" not in values:
+        for alias in catalog_aliases:
+            if alias in values:
+                values["catalog_id"] = values.pop(alias)
+                break
+    return values
+
+
+def _coerce_str_fields(values: dict, fields: tuple[str, ...]) -> dict:
+    """Convert dict/list values to JSON strings for fields that expect str."""
+    if not isinstance(values, dict):
+        return values
+    for field in fields:
+        if field in values and isinstance(values[field], (dict, list)):
+            values[field] = json.dumps(values[field], ensure_ascii=False)
+    return values
 
 
 class HardwareUoRef(FlexModel):
@@ -16,6 +48,23 @@ class HardwareUoRef(FlexModel):
     discussion: str = ""
     confidence: float = 0.0
     source_section: str = ""
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_fields(cls, values: Any) -> Any:
+        if not isinstance(values, dict):
+            return values
+        values = _remap_name_fields(
+            values,
+            name_aliases=("uo_name", "unit_operation_name"),
+            catalog_aliases=("uo_id", "unit_operation_id"),
+        )
+        values = _coerce_str_fields(
+            values,
+            fields=("input", "output", "equipment", "consumables",
+                    "material_and_method", "result", "discussion"),
+        )
+        return values
 
     @field_validator("confidence")
     @classmethod
@@ -39,6 +88,23 @@ class SoftwareUoRef(FlexModel):
     confidence: float = 0.0
     source_section: str = ""
 
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_fields(cls, values: Any) -> Any:
+        if not isinstance(values, dict):
+            return values
+        values = _remap_name_fields(
+            values,
+            name_aliases=("uo_name", "unit_operation_name"),
+            catalog_aliases=("uo_id", "unit_operation_id"),
+        )
+        values = _coerce_str_fields(
+            values,
+            fields=("input", "output", "parameters", "environment",
+                    "method", "result", "discussion"),
+        )
+        return values
+
     @field_validator("confidence")
     @classmethod
     def check_confidence(cls, v: float) -> float:
@@ -54,6 +120,18 @@ class WorkflowRef(FlexModel):
     is_new: bool = False
     confidence: float = 0.0
     source_section: str = ""
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_fields(cls, values: Any) -> Any:
+        if not isinstance(values, dict):
+            return values
+        values = _remap_name_fields(
+            values,
+            name_aliases=("workflow_name",),
+            catalog_aliases=("workflow_id",),
+        )
+        return values
 
 
 class EquipmentEntry(FlexModel):
