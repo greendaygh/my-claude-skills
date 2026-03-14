@@ -97,8 +97,8 @@
     "uo_connections": {
       "description": "Connections between unit operations (workflow structure)",
       "fields": {
-        "from_uo": "Source UO name or ID",
-        "to_uo": "Target UO name or ID",
+        "from_uo": "Source UO catalog_id (e.g., UHW250) for cataloged UOs, or UO name for is_new UOs only",
+        "to_uo": "Target UO catalog_id (e.g., USW130) for cataloged UOs, or UO name for is_new UOs only",
         "transfer_type": "sample | data | control_signal",
         "transfer_object": "What is transferred between UOs",
         "confidence": "0.0-1.0 confidence score"
@@ -126,6 +126,8 @@
     "Extract upstream workflows (steps performed before the target workflow) if described in the paper, e.g. strain construction, media preparation, sample preprocessing, transformation",
     "Extract downstream workflows (steps performed after the target workflow) if described in the paper, e.g. purification, analytics, quality verification, scale-up",
     "Include all identified upstream/downstream workflows in the workflows array with appropriate confidence scores reflecting how extensively the paper describes them",
-    "Record inter-workflow connections in uo_connections to capture the sequential or data-flow relationships between upstream, target, and downstream workflows"
+    "Record inter-workflow connections in uo_connections to capture the sequential or data-flow relationships between upstream, target, and downstream workflows",
+    "The top-level 'doi' field is REQUIRED. Copy it from the paper_list entry for this paper.",
+    "uo_connections from_uo/to_uo: use catalog_id (e.g., UHW250, USW130) for cataloged UOs. For is_new UOs without catalog_id, use the UO name. Do NOT use workflow names or workflow IDs."
   ]
 }

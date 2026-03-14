@@ -132,6 +132,49 @@ def _cross_validate_paper_lists(
             ))
 
 
+def _cross_validate_uo_connections(
+    output_dir: Path,
+    violations: list[DetailedViolation],
+) -> None:
+    """Check that uo_connections from_uo/to_uo reference valid UOs."""
+    ext_dir = output_dir / "02_extractions"
+    if not ext_dir.exists():
+        return
+    for ext_file in sorted(ext_dir.glob("*.json")):
+        try:
+            data = json.loads(ext_file.read_text())
+        except Exception:
+            continue
+        # Build valid reference set: catalog_ids + is_new UO names
+        valid_refs = set()
+        for uo in data.get("hardware_uos", []):
+            if isinstance(uo, dict):
+                cid = uo.get("catalog_id")
+                if cid:
+                    valid_refs.add(cid)
+                elif uo.get("is_new") and uo.get("name"):
+                    valid_refs.add(uo["name"])
+        for uo in data.get("software_uos", []):
+            if isinstance(uo, dict):
+                cid = uo.get("catalog_id")
+                if cid:
+                    valid_refs.add(cid)
+                elif uo.get("is_new") and uo.get("name"):
+                    valid_refs.add(uo["name"])
+        for conn in data.get("uo_connections", []):
+            if not isinstance(conn, dict):
+                continue
+            for field in ("from_uo", "to_uo"):
+                ref = conn.get(field, "")
+                if ref and ref not in valid_refs:
+                    violations.append(DetailedViolation(
+                        file=str(ext_file),
+                        field=f"uo_connections.{field}",
+                        message=f"'{ref}' not found in cataloged UO IDs or is_new UO names",
+                        severity="warning",
+                    ))
+
+
 def _run_quick(output_dir: Path, run_id: str) -> dict:
     """Quick post-search validation: file exists, paper_id format, DOI overlap."""
     papers_dir = output_dir / "01_papers"
@@ -185,6 +228,7 @@ def _run_all(output_dir: Path, verbose: bool = False) -> list[DetailedViolation]
     if extractions_dir.exists():
         for ext_file in sorted(extractions_dir.glob("*.json")):
             _validate_file(ext_file, ExtractionResult, violations, verbose)
+        _cross_validate_uo_connections(output_dir, violations)
 
     summaries_dir = output_dir / "03_summaries"
     if summaries_dir.exists():

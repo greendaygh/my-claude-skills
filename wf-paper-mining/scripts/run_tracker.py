@@ -118,10 +118,14 @@ class RunTracker:
         else:
             idx = RegistryIndex(created=_now())
 
-        extracted = sum(
-            1 for ps in self._state.paper_status.values()
-            if ps.status == "extracted"
-        )
+        ext_dir = self.root_dir / self.wf_id / "02_extractions"
+        if ext_dir.exists():
+            extracted = len(list(ext_dir.glob(f"{self.wf_id}_P*.json")))
+        else:
+            extracted = sum(
+                1 for ps in self._state.paper_status.values()
+                if ps.status == "extracted"
+            )
         idx.workflows[self.wf_id] = WorkflowIndexEntry(
             domain=self._state.domain,
             run_count=len(self._state.runs),
@@ -243,6 +247,20 @@ class RunTracker:
             ps.error = reason or "rejected by panel"
         elif verdict == "flag_reextract":
             ps.status = "pending"
+
+    def sync_after_cleanup(self) -> dict:
+        """Sync state after Phase 4 JSON cleanup. Mark missing files as lost."""
+        ext_dir = self.root_dir / self.wf_id / "02_extractions"
+        lost_count = 0
+        for paper_id, ps in self._state.paper_status.items():
+            if ps.status == "extracted":
+                if not (ext_dir / f"{paper_id}.json").exists():
+                    ps.status = "lost"
+                    ps.error = "extraction file missing after cleanup"
+                    lost_count += 1
+        if lost_count > 0:
+            self._save()
+        return {"lost_count": lost_count}
 
     def apply_verdict(self, paper_id: str, verdict: str,
                       reason: str = "") -> None:
@@ -470,6 +488,9 @@ def _build_parser() -> argparse.ArgumentParser:
     _add_common(p)
     p.add_argument("--result", required=True)
 
+    p = sub.add_parser("sync-after-cleanup")
+    _add_common(p)
+
     p = sub.add_parser("complete-run")
     _add_common(p)
     p.add_argument("--run-id", type=int, required=True)
@@ -531,6 +552,9 @@ def main() -> None:
 
     elif args.command == "apply-verdicts":
         result = tracker.apply_verdicts_from_file(Path(args.result))
+
+    elif args.command == "sync-after-cleanup":
+        result = tracker.sync_after_cleanup()
 
     elif args.command == "complete-run":
         panels = [p.strip() for p in args.panels_run.split(",") if p.strip()] if args.panels_run else []

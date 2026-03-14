@@ -109,7 +109,8 @@ def _build_uo_composition(ext: ExtractionResult) -> tuple[UoStep, ...]:
 
 
 def _composition_key(steps: tuple[UoStep, ...]) -> tuple[tuple[str | None, str, bool], ...]:
-    return tuple((s.uo_id, s.uo_name, s.is_hardware) for s in steps)
+    """Normalize to sorted tuple for order-independent variant comparison."""
+    return tuple(sorted((s.uo_id, s.uo_name, s.is_hardware) for s in steps))
 
 
 def _aggregate(extractions: list[ExtractionResult], workflow_id: str) -> tuple[ResourceSummary, list[dict]]:
@@ -216,21 +217,20 @@ def _detect_variants(
     existing_variant_ids: set[str],
 ) -> VariantSummary:
     now = datetime.now(timezone.utc).isoformat()
-    pattern_to_papers: dict[tuple[tuple[str | None, str, bool], ...], list[str]] = {}
+    pattern_to_data: dict[tuple[tuple[str | None, str, bool], ...], tuple[list[str], tuple[UoStep, ...]]] = {}
     for ext in extractions:
         steps = _build_uo_composition(ext)
         if not steps:
             continue
         key = _composition_key(steps)
-        pattern_to_papers.setdefault(key, []).append(ext.paper_id)
+        if key not in pattern_to_data:
+            pattern_to_data[key] = ([], steps)  # preserve first-seen step order
+        pattern_to_data[key][0].append(ext.paper_id)
 
     variants: list[VariantDefinition] = []
     new_since: list[str] = []
-    for i, (key, papers) in enumerate(sorted(pattern_to_papers.items(), key=lambda x: -len(x[1])), 1):
-        steps_list = [
-            UoStep(order=j + 1, uo_id=triple[0], uo_name=triple[1], is_hardware=triple[2])
-            for j, triple in enumerate(key)
-        ]
+    for i, (key, (papers, orig_steps)) in enumerate(sorted(pattern_to_data.items(), key=lambda x: -len(x[1][0])), 1):
+        steps_list = list(orig_steps)
         comp = UoComposition(steps=steps_list)
         vid = f"V{i:03d}"
         vdef = VariantDefinition(

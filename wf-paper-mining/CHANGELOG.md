@@ -1,5 +1,29 @@
 # Changelog — wf-paper-mining
 
+## [2.3.0] — 2026-03-14
+
+### Changed
+- **Phase 4 추출 프롬프트 강화** — uo_connections, workflows, doi 규칙 명시
+  - `from_uo`/`to_uo`: catalog_id 사용 필수 (is_new UO는 name 허용)
+  - `workflows`: 논문의 실제 워크플로 기록, 대상 워크플로 포함 보장
+  - `doi`: 필수 필드로 명시
+- **Phase 3 Panel B 도메인 특이성 검사** — 관대한 수용 유지하되 대상 워크플로와 무관한 논문 reject
+- **Phase 5a Panel C 점수 형식** — 0.0~1.0 float 필수 (소수점 포함, 정수 불가)
+- **extraction_template.json** — `from_uo`/`to_uo` 설명을 catalog_id 기준으로 변경, doi/uo_connections 가이드라인 추가
+- **aggregate_summary.py** — variant 감지를 순서 독립 비교(`sorted tuple`)로 변경, 첫 등장 step 순서 보존
+
+### Added
+- **run_tracker.py `sync_after_cleanup()`** — Phase 4 JSON cleanup 후 누락 파일을 "lost" 상태로 동기화
+- **run_tracker.py `sync-after-cleanup` CLI** — 새 서브커맨드
+- **run_tracker.py `_update_index()` 개선** — `extracted_count`를 실제 파일 수 기준으로 계산
+- **validate_outputs.py `_cross_validate_uo_connections()`** — uo_connections의 from_uo/to_uo가 유효한 catalog_id 또는 is_new UO name인지 교차 검증
+- **SKILL.md Phase 4 post-cleanup** — JSON cleanup 후 `sync-after-cleanup` 자동 호출 추가
+
+### Fixed
+- Phase 4 post-cleanup에서 손상 파일 삭제 시 wf_state/registry_index 미갱신 문제 해결 (재실행 시 영구 데이터 손실 위험 제거)
+
+---
+
 ## [2.2.0] — 2026-03-12
 
 ### Fixed
