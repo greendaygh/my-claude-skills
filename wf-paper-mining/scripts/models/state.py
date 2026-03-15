@@ -6,7 +6,7 @@ from .base import StrictModel
 
 class PaperStatus(StrictModel):
     doi: str = ""
-    status: Literal["pending", "fetched", "extracted", "rejected", "failed"] = "pending"
+    status: Literal["pending", "fetched", "extracted", "rejected", "failed", "lost"] = "pending"
     run_id: int = 0
     panel_verdict: Literal["accept", "reject", "flag_reextract"] | None = None
     error: str | None = None

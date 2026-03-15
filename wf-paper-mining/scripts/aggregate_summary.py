@@ -108,9 +108,9 @@ def _build_uo_composition(ext: ExtractionResult) -> tuple[UoStep, ...]:
     return tuple(steps)
 
 
-def _composition_key(steps: tuple[UoStep, ...]) -> tuple[tuple[str | None, str, bool], ...]:
+def _composition_key(steps: tuple[UoStep, ...]) -> tuple[tuple[str, str, bool], ...]:
     """Normalize to sorted tuple for order-independent variant comparison."""
-    return tuple(sorted((s.uo_id, s.uo_name, s.is_hardware) for s in steps))
+    return tuple(sorted((s.uo_id or "", s.uo_name or "", s.is_hardware) for s in steps))
 
 
 def _aggregate(extractions: list[ExtractionResult], workflow_id: str) -> tuple[ResourceSummary, list[dict]]:
