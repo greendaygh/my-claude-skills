@@ -104,6 +104,15 @@
         "confidence": "0.0-1.0 confidence score"
       }
     },
+    "workflow_connections": {
+      "description": "Connections between workflows (upstream/downstream/parallel relationships)",
+      "fields": {
+        "from_workflow": "Source workflow catalog_id (e.g., WB045, WT010)",
+        "to_workflow": "Target workflow catalog_id (e.g., WB005, WT020)",
+        "relationship": "upstream | downstream | parallel",
+        "description": "Brief description of the relationship between workflows"
+      }
+    },
     "qc_checkpoints": {
       "description": "Quality control checkpoints in the workflow",
       "fields": {
@@ -126,7 +135,7 @@
     "Extract upstream workflows (steps performed before the target workflow) if described in the paper, e.g. strain construction, media preparation, sample preprocessing, transformation",
     "Extract downstream workflows (steps performed after the target workflow) if described in the paper, e.g. purification, analytics, quality verification, scale-up",
     "Include all identified upstream/downstream workflows in the workflows array with appropriate confidence scores reflecting how extensively the paper describes them",
-    "Record inter-workflow connections in uo_connections to capture the sequential or data-flow relationships between upstream, target, and downstream workflows",
+    "Record workflow-level relationships (upstream/downstream) in the workflow_connections field using workflow catalog_ids. Do NOT mix workflow references into uo_connections.",
     "The top-level 'doi' field is REQUIRED. Copy it from the paper_list entry for this paper.",
     "uo_connections from_uo/to_uo: use catalog_id (e.g., UHW250, USW130) for cataloged UOs. For is_new UOs without catalog_id, use the UO name. Do NOT use workflow names or workflow IDs."
   ]
