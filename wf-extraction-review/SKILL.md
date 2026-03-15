@@ -102,6 +102,12 @@ cp -r $ROOT_DIR/{WF_ID}/02_extractions $ROOT_DIR/{WF_ID}/02_extractions_backup_$
 > - 카탈로그에 존재하는 UO: catalog_id (예: UHW250, USW130) 사용
 > - is_new=true인 UO: 해당 UO의 name 사용
 > - from_uo와 to_uo는 반드시 이 파일의 hardware_uos 또는 software_uos에 존재하는 UO만 참조
+> - **완전성**: 논문에서 확인되는 모든 UO 간 sample/data/control_signal 흐름을 빠짐없이 기록할 것. UO가 N개이면 모든 쌍을 검토하여 관계가 있는 것은 모두 포함.
+>
+> **workflow_connections 규칙 (Step 2 보강 시)**:
+> - from_workflow, to_workflow: 워크플로 catalog_id (예: WB045, WT010) 사용
+> - relationship: upstream / downstream / parallel
+> - **완전성**: workflows 배열에 있는 모든 워크플로 쌍 간의 관계를 검토하고, 논문에서 관계가 확인되는 모든 쌍에 대해 항목을 생성할 것. workflows가 N개이면 최대 N*(N-1)/2개의 연결이 가능.
 >
 > **qc_checkpoints 규칙**:
 > - after_uo 필드는 catalog_id (예: UHW380, UHW230)를 사용하십시오. UO 이름을 사용하지 말 것.
