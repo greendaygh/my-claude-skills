@@ -117,7 +117,7 @@
       "description": "Quality control checkpoints in the workflow",
       "fields": {
         "name": "QC checkpoint name",
-        "after_uo": "UO after which this QC is performed",
+        "after_uo": "UO catalog_id (e.g., UHW380) after which this QC is performed. Use catalog_id, NOT UO name.",
         "metric": "What is measured",
         "threshold": "Pass/fail criteria",
         "action_on_fail": "What happens on failure",

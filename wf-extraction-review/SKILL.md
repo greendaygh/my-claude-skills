@@ -11,6 +11,7 @@
 - **Thin Controller** 패턴: 오케스트레이터는 스크립트 실행 + 서브에이전트 스폰만 수행.
 - **순차 실행 전용**: 워크플로 간 병렬 실행 금지.
 - **서브에이전트 최대 3회**: 검토·보강, Panel C, flag_reextract 처리
+- **Step 2와 Step 3은 반드시 별도 서브에이전트로 실행**: Step 2(검토·보강) 서브에이전트가 완료된 후, 오케스트레이터가 JSON cleanup을 수행하고, 그 다음 Step 3(Panel C) 서브에이전트를 별도로 스폰한다. **절대로 하나의 서브에이전트에서 Step 2와 Step 3을 동시에 수행하지 말 것.**
 - **wf-paper-mining 공유**: assets, scripts (aggregate_summary, validate_outputs, run_tracker)를 공유 참조.
 
 ## Prerequisites
@@ -102,8 +103,13 @@ cp -r $ROOT_DIR/{WF_ID}/02_extractions $ROOT_DIR/{WF_ID}/02_extractions_backup_$
 > - is_new=true인 UO: 해당 UO의 name 사용
 > - from_uo와 to_uo는 반드시 이 파일의 hardware_uos 또는 software_uos에 존재하는 UO만 참조
 >
+> **qc_checkpoints 규칙**:
+> - after_uo 필드는 catalog_id (예: UHW380, UHW230)를 사용하십시오. UO 이름을 사용하지 말 것.
+>
 > **workflows 규칙**:
 > - 처리 대상 워크플로({WF_ID})가 논문에 언급되어 있다면 반드시 workflows 배열에 포함
+>
+> **이 서브에이전트는 검토·보강만 수행한다. Panel C 검증은 수행하지 말 것.**
 >
 > 결과를 {wf_output_dir}/02_extractions/{paper_id}.json에 저장 (기존 파일 덮어쓰기).
 > 각 파일 저장 후 JSON 유효성을 검증. 실패 시 해당 파일 삭제하지 말고 오류를 보고.
@@ -144,7 +150,7 @@ for f in os.listdir(ext_dir):
 > 검증 기준:
 > - **완전성**: full text에 있는 주요 정보(UO, equipment, reagents)가 추출에 반영되었는지
 > - **정확성**: 추출된 정보가 full text 내용과 일치하는지
-> - **구조 준수**: uo_connections가 catalog_id를 사용하는지, workflow_connections가 적절한지
+> - **구조 준수**: uo_connections의 from_uo/to_uo가 catalog_id를 사용하는지, qc_checkpoints의 after_uo가 catalog_id를 사용하는지, workflow_connections가 적절한지
 > - **스키마 준수**: doi 존재, 빈 필드 최소화, confidence 값 범위 0.0~1.0
 >
 > 3인 전문가 (Extraction Reviewer, Catalog Matcher, Completeness Reviewer):
@@ -154,6 +160,8 @@ for f in os.listdir(ext_dir):
 >
 > **flag_reextract 기준**: 주요 UO 누락, 잘못된 카탈로그 매칭, 심각한 구조적 오류
 > **reject 기준**: 논문과 무관한 추출, 전면적 오류
+>
+> **중요**: 각 논문에 대해 반드시 round_1, round_2, round_3_vote를 모두 포함해야 한다. 간소화 금지.
 >
 > 출력 JSON 형식:
 > ```json
